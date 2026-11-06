@@ -1,0 +1,31 @@
+{
+  "name": "pou-ipad",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "dev:online": "node scripts/dev-online.mjs",
+    "multiplayer": "node server/index.mjs",
+    "start": "node server/index.mjs",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "build": "node scripts/build-icons.mjs && npm run check && vite build && node scripts/build-offline.mjs",
+    "build:icons": "node scripts/build-icons.mjs",
+    "prepare:media": "node scripts/prepare-media.mjs",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "node --test-isolation=none --experimental-strip-types --test tests/*.test.ts",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.58.2",
+    "sharp": "0.34.5",
+    "svelte-check": "^4.7.6",
+    "typescript": "5.9.3",
+    "vite": "6.4.3"
+  },
+  "dependencies": {
+    "@sveltejs/vite-plugin-svelte": "^5.1.1",
+    "svelte": "^5.57.2",
+    "ws": "^8.22.1"
+  }
+}
