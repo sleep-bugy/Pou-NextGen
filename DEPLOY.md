@@ -1,10 +1,31 @@
 # Panduan deploy Pou
 
-Game ini memakai Svelte/Vite untuk antarmuka dan server Node.js untuk WebSocket, chat, teman, kebun, leaderboard, serta co-op. Untuk semua fitur, jalankan **satu instance server Node** dan sediakan penyimpanan permanen. Hosting statis saja bisa menjalankan permainan lokal, tetapi fitur Mabar tidak tersambung.
+Game ini memakai Svelte/Vite untuk antarmuka. Multiplayer tersedia melalui Cloudflare Workers dan Durable Objects, atau server Node.js sendiri. Hosting statis saja menjalankan permainan lokal tanpa fitur Mabar.
 
 ## Cloudflare gratis
 
-Ada dua cara yang bisa dipakai dengan kode saat ini:
+### Workers dan Durable Objects: game dan multiplayer
+
+Konfigurasi `wrangler.jsonc` menggunakan Worker untuk endpoint WebSocket dan aset, serta SQLite-backed Durable Object untuk menyimpan profil, teman, kebun, furnitur, peringkat, dan hadiah. Ruangan menggunakan satu lobby bersama, dengan batas aplikasi 200 koneksi dan 5.000 profil. Penyimpanan game karakter di browser tetap terpisah dari profil online.
+
+1. Siapkan akun Cloudflare dan Node.js 22.18 atau lebih baru.
+2. Dari direktori proyek, jalankan:
+
+```sh
+npm ci
+npm run build
+npx wrangler@4 login
+npx wrangler@4 deploy
+```
+
+3. Buka alamat `workers.dev` yang diberikan Wrangler pada dua perangkat. Pastikan `/api/health` menghasilkan `{"ok":true,"backend":"cloudflare"}`, lalu coba membuat ruangan, bergabung, dan mengirim chat.
+4. Untuk deploy otomatis lewat GitHub, buat **Worker** dengan Git integration di Cloudflare, pilih repository, gunakan `npm ci && npm run build` sebagai build command dan `npx wrangler@4 deploy` sebagai deploy command. `wrangler.jsonc` harus berada di akar repository. Push kode proyek terbaru sebelum menghubungkan repository.
+
+Cloudflare Free **tidak tanpa batas**. Saat panduan ini ditulis, Durable Objects mencakup 100.000 request per hari, 13.000 GB-detik per hari, 100.000 baris ditulis per hari, dan penyimpanan total 5 GB. Pesan WebSocket masuk diperhitungkan menurut aturan Cloudflare; pertandingan aktif juga memakai durasi komputasi. Jika kuota habis, operasi dapat gagal sampai kuota direset. Periksa [harga Durable Objects](https://developers.cloudflare.com/durable-objects/platform/pricing/) dan [batas Workers](https://developers.cloudflare.com/workers/platform/limits/) sebelum digunakan. Satu lobby cocok untuk skala kecil; bukan jaminan kapasitas untuk pemain tak terbatas.
+
+WebSocket menggunakan hibernasi saat tidak ada pertandingan; timer 50 ms hanya aktif saat pertandingan berlangsung. Data tersimpan pada Durable Object akun Cloudflare dan tidak otomatis pindah dari file `social.json` server Node. Pertandingan aktif dan chat sementara dapat terpengaruh jika Worker diperbarui atau koneksi terputus. Uji dua perangkat setelah deploy dan pantau penggunaan di dashboard.
+
+### Alternatif lain
 
 ### A. Cloudflare Pages: permainan lokal dan offline
 
@@ -28,10 +49,6 @@ cloudflared tunnel --url http://localhost:3001
 3. Buka URL HTTPS `*.trycloudflare.com` yang muncul di **kedua perangkat**. Coba `/api/health`, buat ruangan, lalu bergabung lewat kode. Seluruh HTTP dan WebSocket harus memakai hostname yang sama; jangan buka frontend di `pages.dev` sementara backend memakai hostname Tunnel lain, karena klien dan pemeriksaan Origin server menggunakan origin yang sama.
 
 Quick Tunnel bersifat sementara; alamat berubah saat dijalankan ulang dan Cloudflare menyediakannya untuk pengujian. Karena save karakter terikat origin, ekspor save sebelum alamat berganti. Untuk alamat tetap, konfigurasikan **named Tunnel** dengan hostname/domain yang tersedia di akun Cloudflare, arahkan HTTP ke `http://localhost:3001`, dan gunakan direktori `POU_DATA_DIR` permanen. Lihat [panduan Tunnel](https://developers.cloudflare.com/tunnel/get-started/) dan [Quick Tunnels](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/).
-
-### Cloudflare-only untuk multiplayer
-
-Workers dan Durable Objects tersedia pada paket gratis dengan batas pemakaian, tetapi backend proyek ini memakai proses Node, WebSocket `ws`, timer, dan file lokal sehingga **belum dapat langsung di-deploy sebagai Worker**. Diperlukan port backend ke Workers/Durable Objects dan penyimpanan Cloudflare sebelum multiplayer benar-benar berjalan tanpa komputer/server sendiri. Lihat [harga Durable Objects](https://developers.cloudflare.com/durable-objects/platform/pricing/) dan [WebSocket Durable Objects](https://developers.cloudflare.com/durable-objects/best-practices/websockets/). Tidak ada port Worker yang disertakan dalam proyek saat ini.
 
 ## Persiapan
 
