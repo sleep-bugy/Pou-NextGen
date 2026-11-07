@@ -13,7 +13,7 @@ const shuffle = <T>(array: T[]) => {
   for (let i = array.length - 1; i > 0; i--) { const j = random(i + 1); [array[i], array[j]] = [array[j], array[i]]; }
   return array;
 };
-interface Item { x: number; y: number; v?: number; type?: number; w?: number; h?: number; }
+interface Item { x: number; y: number; v?: number; type?: number; w?: number; h?: number; coin?: boolean; }
 
 export function winningLine(board: number[], columns: number, rows: number, count: number): number {
   for (let y = 0; y < rows; y++) for (let x = 0; x < columns; x++) {
@@ -47,6 +47,7 @@ export class MiniEngine {
   private W = 480;
   score = 0;
   lives = 3;
+  collectedCoins = 0;
   remaining = 60;
   finished = false;
   paused = false;
@@ -89,7 +90,7 @@ export class MiniEngine {
   private signal = new AbortController();
 
   constructor(private canvas: HTMLCanvasElement, gameId: string, private look: PouLook,
-    private onScore: (score: number, lives: number, time: number) => void,
+    private onScore: (score: number, lives: number, time: number, coins: number) => void,
     private onEnd: (score: number, message: string) => void, private localize: (text: string) => string = text => text) {
     this.game = GAMES.find(g => g.id === gameId)!;
     this.c = canvas.getContext('2d')!;
@@ -148,8 +149,11 @@ export class MiniEngine {
   private seedJump() {
     const width=Math.min(180,Math.max(100,this.W*.18));
     this.items=[{x:this.W/2-width/2,y:590,w:width}];
-    while(this.items.length<10)this.items.push(nextPlatform(this.items.at(-1)! as {x:number;y:number;w:number},this.W,Math.random));
+    while(this.items.length<10)this.items.push(this.jumpPlatform(this.items.at(-1)!));
     this.player={x:this.W/2,y:590-JUMP_RADIUS,v:-JUMP_SPEED};
+  }
+  private jumpPlatform(from: Item): Item {
+    return { ...nextPlatform(from as {x:number;y:number;w:number}, this.W, Math.random), coin: Math.random() < .4 };
   }
   private effect(text:string,x=this.player.x,y=this.player.y,color='#fff') { this.effects.push({text,x,y,color,life:.8});this.effects=this.effects.slice(-16); }
   private controlKey(key:string){return ({a:'ArrowLeft',d:'ArrowRight',w:'ArrowUp'} as Record<string,string>)[key.toLowerCase()]??key;}
@@ -221,7 +225,7 @@ export class MiniEngine {
     if (!this.paused && !document.hidden && !this.finished) this.update(dt);
     this.draw();
     if (this.lastScore !== this.score || Math.floor(this.tick * 5) !== Math.floor((this.tick - dt) * 5)) {
-      this.onScore(this.score, this.lives, Math.ceil(this.remaining)); this.lastScore = this.score;
+      this.onScore(this.score, this.lives, Math.ceil(this.remaining), this.collectedCoins); this.lastScore = this.score;
     }
     this.frame = requestAnimationFrame(this.loop);
   };
@@ -259,6 +263,13 @@ export class MiniEngine {
     if (mode === 'jump') {
       const oldY = this.player.y;
       this.player.v! += dt * JUMP_GRAVITY; this.player.y += this.player.v! * dt;
+      for (const platform of this.items) {
+        if (!platform.coin) continue;
+        const x = platform.x + platform.w! / 2, y = platform.y - 44;
+        if (Math.abs(this.player.x - x) < 34 && Math.min(oldY, this.player.y) <= y + 32 && Math.max(oldY, this.player.y) >= y - 32) {
+          platform.coin = false; this.collectedCoins++; this.effect('+1', x, y, '#fff2a4'); audio.play('coin');
+        }
+      }
       if (this.player.v! > 0) for (const platform of this.items) {
         if (oldY + JUMP_RADIUS <= platform.y && this.player.y + JUMP_RADIUS >= platform.y && this.player.x + 22 > platform.x && this.player.x - 22 < platform.x + platform.w!) {
           this.player.v = -JUMP_SPEED; this.player.y = platform.y-JUMP_RADIUS;this.effect('↑',this.player.x,platform.y,'#fff2a4');audio.play('cloud');break;
@@ -273,7 +284,7 @@ export class MiniEngine {
       this.items = this.items.filter(i => i.y < H + 30);
       while (this.items.length < 10) {
         const last = this.items.reduce((a,b)=>a.y<b.y?a:b);
-        this.items.push(nextPlatform(last as {x:number;y:number;w:number},this.W,Math.random));
+        this.items.push(this.jumpPlatform(last));
       }
       if (this.player.y > H + 40) this.finish();
     }
@@ -532,7 +543,10 @@ export class MiniEngine {
       drawPou(c, this.player.x, 558, 88, { ...this.look, mouth: 0.65, lookY: -1 });
       for (const item of this.items) this.sprite(item.type! < 8 ? `food/${FOODS[item.type!]}.png` : item.type === 8 ? 'games/food/shoe.png' : 'games/food/horseshoe.png', item.x, item.y, 48);
     } else if (mode === 'jump') {
-      for (const platform of this.items) this.sprite('games/jump/ground1.png', platform.x + platform.w! / 2, platform.y + 10, platform.w!, 28);
+      for (const platform of this.items) {
+        this.sprite('games/jump/ground1.png', platform.x + platform.w! / 2, platform.y + 10, platform.w!, 28);
+        if (platform.coin) this.sprite('coin/coin_sm.png', platform.x + platform.w! / 2, platform.y - 44, 32, 32);
+      }
       drawPou(c, this.player.x, this.player.y, 62, this.look);
     } else if (mode === 'fall') {
       for (const platform of this.items) {

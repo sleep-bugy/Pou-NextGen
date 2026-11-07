@@ -8,16 +8,16 @@
   import { lookFromSave } from '../lib/draw-pou';
   import { audio } from '../lib/audio';
   import FullscreenButton from './FullscreenButton.svelte';
-  let { game, save, onclose, onfinish }: { game: GameInfo; save: Save; onclose: () => void; onfinish: (id: string, score: number) => number } = $props();
+  let { game, save, onclose, onfinish }: { game: GameInfo; save: Save; onclose: () => void; onfinish: (id: string, score: number, bonusCoins?: number) => number } = $props();
   let canvas: HTMLCanvasElement;
   let started = $state(false), paused = $state(false), result = $state(false);
-  let score = $state(0), lives = $state(3), time = $state(60), reward = $state(0), message = $state('');
+  let score = $state(0), coins = $state(0), lives = $state(3), time = $state(60), reward = $state(0), message = $state('');
   let engine: MiniEngine | undefined;
   const hud = $derived(gameHud(game.mode));
   function play() {
-    engine?.destroy(); started = true; result = false; paused = false;
-    engine = new MiniEngine(canvas, game.id, lookFromSave(save), (s, l, t) => { score = s; lives = l; time = t; }, (s, m) => {
-      score = s; message = m; reward = onfinish(game.id, s); result = true; audio.stop();
+    engine?.destroy(); started = true; result = false; paused = false; coins = 0;
+    engine = new MiniEngine(canvas, game.id, lookFromSave(save), (s, l, t, c) => { score = s; lives = l; time = t; coins = c; }, (s, m) => {
+      score = s; message = m; reward = onfinish(game.id, s, engine?.collectedCoins ?? 0); result = true; audio.stop();
     }, text => localMessage($language,text));
     audio.setMusic(game.music);
   }
@@ -37,13 +37,13 @@
     <FullscreenButton compact />
     <button class="image-button" aria-label={paused ? translate($language,'Lanjutkan permainan','Resume game') : translate($language,'Jeda permainan','Pause game')} onclick={() => pause(!paused)} disabled={!started || result}><img src={imageUrl(paused?'icons/play.svg':'icons/pause.png')} alt="" /></button>
   </header>
-  <div class="game-score" style:grid-template-columns={`repeat(${2+Number(hud.lives)+Number(hud.timed)},minmax(0,1fr))`}><span>{translate($language,"Skor:","Score:")} {score}</span><span>{translate($language,"Terbaik:","Best:")} {save.scores[game.id] ?? 0}</span>{#if hud.lives}<span>♥ {lives}</span>{/if}{#if hud.timed}<span>{time}s</span>{/if}</div>
+  <div class="game-score" style:grid-template-columns={`repeat(${2+Number(hud.lives)+Number(hud.timed)+Number(game.mode==='jump')},minmax(0,1fr))`}><span>{translate($language,"Skor:","Score:")} {score}</span><span>{translate($language,"Terbaik:","Best:")} {save.scores[game.id] ?? 0}</span>{#if game.mode==='jump'}<span aria-label={translate($language,`Koin terkumpul: ${coins}`,`Coins collected: ${coins}`)}>🪙 {coins}</span>{/if}{#if hud.lives}<span>♥ {lives}</span>{/if}{#if hud.timed}<span>{time}s</span>{/if}</div>
   <canvas class="game-canvas" bind:this={canvas} aria-label={gameInstruction($language,game.id,game.instructions)}></canvas>
   {#if !started}
     <div class="game-overlay">
       <div class="game-card">
         <img class="game-icon" src={imageUrl(`icons/games/${game.name}.png`)} alt="" />
-        <h2>{game.name}</h2><p>{gameInstruction($language,game.id,game.instructions)}</p>
+        <h2>{game.name}</h2><p>{gameInstruction($language,game.id,game.instructions)}</p>{#if game.mode==='jump'}<p>{translate($language,'Pou melompat otomatis saat mendarat. Ambil koin dan raih tempat lebih tinggi!','Pou bounces automatically on landing. Collect coins and climb higher!')}</p>{/if}
         <p class="control-help">{['catch','jump','fall'].includes(game.mode)?translate($language,'Geser layar / gerakkan mouse. Keyboard: ← → atau A D.','Drag or move the mouse. Keyboard: ← → or A D.'): ['fly','run'].includes(game.mode)?translate($language,'Ketuk, klik, atau tekan Spasi untuk melompat.','Tap, click, or press Space to jump.'):game.mode==='hoops'?translate($language,'Tarik dari bola ke bawah-kiri. Ikuti lintasan dan indikator Power.','Drag the ball down and left. Follow the aim dots and power meter.'):game.mode==='goal'?translate($language,'Mulai dari bola, lalu geser ke atas menuju gawang.','Swipe upward from the ball toward the goal.'):translate($language,'Ketuk atau klik pilihan di papan.','Tap or click a choice on the board.')}</p>
         <p>{translate($language,"Terbaik:","Best:")} {save.scores[game.id] ?? 0}</p>
         <button class="green-button" onclick={play}>{translate($language,"Main!","Play!")}</button>

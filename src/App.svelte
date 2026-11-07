@@ -255,9 +255,9 @@
     if (save.coins < p.price) { notify('Not enough coins!'); return; }
     commit(s => { spend(s, p.price); s.potions[id] = (s.potions[id] ?? 0) + 1; }); audio.play('buy');
   }
-  function finishGame(id: string, score: number) {
+  function finishGame(id: string, score: number, bonusCoins = 0) {
     if(save.life.state==='dead')return 0;
-    const reward = Math.min(200, Math.floor(score / 3));
+    const reward = Math.min(200, Math.floor(score / 3)) + Math.max(0, Math.floor(bonusCoins));
     commit(s => { earn(s, reward, Math.min(50, Math.floor(score / 2))); s.scores[id] = Math.max(s.scores[id] ?? 0, score); s.counters.played++;care(s,'game'); s.stats.fun = clamp(s.stats.fun + 15); s.stats.energy = clamp(s.stats.energy - 3); s.stats.fullness = clamp(s.stats.fullness - 2); });
     return reward;
   }

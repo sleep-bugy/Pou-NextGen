@@ -11,7 +11,7 @@ export function jumpFlight(rise: number) {
 
 export function nextPlatform(from: {x:number;y:number;w:number},width:number,rng:()=>number=Math.random) {
   const rise = 70+Math.floor(rng()*16), w = Math.min(180,Math.max(100,width*.18));
-  const reach = movementSpeed(width)*jumpFlight(rise)*.55;
+  const reach = Math.min(200, movementSpeed(width)*jumpFlight(rise)*.55);
   const center = Math.max(w/2+8,Math.min(width-w/2-8,from.x+from.w/2+(rng()*2-1)*reach));
   return {x:center-w/2,y:from.y-rise,w};
 }

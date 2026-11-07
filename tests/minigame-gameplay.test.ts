@@ -98,3 +98,30 @@ test('dragging empty court space cannot launch the Hoops ball',()=>{
   assert.equal(a.engine.shot,false);
   a.engine.destroy();
 });
+
+
+test('Sky Jump draws collectible coins and collects each coin only once while jumping',()=>{
+  const a=arena('sky-jump',390,720,()=>0.2);
+  const platform=a.engine.items.find((p:any)=>p.coin);
+  assert.ok(platform);
+  a.engine.draw();
+  assert.ok(a.sprites.some((sprite:any)=>sprite.path==='coin/coin_sm.png'));
+  a.engine.player.x=platform.x+platform.w/2;
+  a.engine.player.y=platform.y-44;
+  a.engine.player.v=-100;
+  a.engine.update(1/120);
+  assert.equal(a.engine.collectedCoins,1);
+  assert.equal(platform.coin,false);
+  a.engine.update(1/120);
+  assert.equal(a.engine.collectedCoins,1);
+  a.engine.destroy();
+});
+
+test('Sky Jump limits horizontal gaps even on very wide screens',()=>{
+  const a=arena('sky-jump',1920,400,()=>0.99);
+  for(let i=1;i<a.engine.items.length;i++){
+    const previous=a.engine.items[i-1],current=a.engine.items[i];
+    assert.ok(Math.abs(current.x+current.w/2-previous.x-previous.w/2)<=200.001);
+  }
+  a.engine.destroy();
+});
