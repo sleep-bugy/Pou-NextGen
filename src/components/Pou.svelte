@@ -13,9 +13,17 @@
     let width = 0, height = 0;
     const c = canvas.getContext('2d')!;
     const resize = new ResizeObserver(([entry]) => {
-      width = entry.contentRect.width; height = entry.contentRect.height;
+      const nextW = Math.round(entry.contentRect.width);
+      const nextH = Math.round(entry.contentRect.height);
+      if (nextW <= 0 || nextH <= 0) return;
+      if (width === nextW && height === nextH) return;
+      width = nextW; height = nextH;
       const dpr = Math.min(devicePixelRatio || 1, 2);
-      canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr);
+      const targetW = Math.round(width * dpr);
+      const targetH = Math.round(height * dpr);
+      if (canvas.width !== targetW || canvas.height !== targetH) {
+        canvas.width = targetW; canvas.height = targetH;
+      }
     });
     resize.observe(canvas);
     const render = (time: number) => {
@@ -49,6 +57,6 @@
 </button>
 
 <style>
-  .pet-target { width:100%; height:100%; border:0; background:none; padding:0; touch-action:none; }
-  canvas { display:block; width:100%; height:100%; }
+  .pet-target { width:100%; height:100%; border:0; background:none; padding:0; touch-action:none; display:block; position:relative; }
+  canvas { display:block; width:100%; height:100%; position:absolute; inset:0; }
 </style>

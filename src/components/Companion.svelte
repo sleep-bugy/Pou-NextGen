@@ -26,5 +26,13 @@
 {#if message}<p class="settings-caption" role="status">{localMessage($language,message)}</p>{/if}
 
 <style>
-  .couple{height:230px;display:grid;grid-template-columns:1fr 25px 1fr;align-items:center}.couple>div{height:100%}.heart{font-size:30px;color:#d84c68;text-align:center}.partner-name{text-align:center;font-size:26px;font-weight:400}.relationship{text-align:center;font-size:18px;margin:12px 0}progress{display:block;width:100%;height:16px;accent-color:#df7396}.color-label{display:flex;align-items:center;justify-content:space-between;font-size:20px;margin-top:10px}.color-label input{width:70px;height:40px}.field{margin-top:20px}
+  .couple{height:220px;display:grid;grid-template-columns:1fr 28px 1fr;grid-template-rows:220px;align-items:center;overflow:hidden;margin:4px 0 10px}
+  .couple>div{height:100%;min-height:0;min-width:0;position:relative}
+  .heart{font-size:32px;color:#d84c68;text-align:center;line-height:1;user-select:none}
+  .partner-name{text-align:center;font-size:26px;font-weight:400;margin:6px 0}
+  .relationship{text-align:center;font-size:18px;margin:10px 0}
+  progress{display:block;width:100%;height:16px;accent-color:#df7396}
+  .color-label{display:flex;align-items:center;justify-content:space-between;font-size:20px;margin-top:10px}
+  .color-label input{width:70px;height:40px}
+  .field{margin-top:20px}
 </style>
