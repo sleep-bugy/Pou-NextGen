@@ -199,3 +199,55 @@
 }
 
 .side-object.lab-experiments{left:auto;right:var(--edge-gap)}.lab-experiments span{font-size:clamp(14px,2.4cqh,19px)}.poison-status{position:absolute;z-index:25;top:24%;left:50%;transform:translateX(-50%);padding:5px 10px;border:1.5px solid #5d743b;border-radius:10px;background:#e7f2b8;font-size:clamp(13px,2.4cqh,19px);white-space:nowrap}.poison-status button{border:0;border-radius:5px;background:#fff4ce;padding:4px 8px;margin-left:7px}.life-status{position:absolute;z-index:30;top:72%;left:50%;transform:translateX(-50%);width:min(84%,360px);text-align:center;padding:9px 14px;border:2px solid #66624c;border-radius:12px;background:#f9f0cf}.life-status p{font-size:23px}.life-status .green-button{margin-top:6px;padding:6px;font-size:19px}.online-entry{margin:0 0 18px}.control-help{font-family:system-ui,sans-serif!important;font-size:14px!important;color:#5e5743}
+
+/* Compact touch layouts reserve separate space for room controls and navigation. */
+@media (max-width: 600px) and (orientation: portrait) {
+  .playfield {
+    --footer-icon: clamp(32px, 6cqh, 48px);
+    --footer-font: clamp(11px, 3.1cqw, 14px);
+    --footer-clearance: calc(max(0px, env(safe-area-inset-bottom)) + 38px + var(--footer-icon) + 38px);
+    --edge-gap: max(8px, env(safe-area-inset-left));
+  }
+  .room-header { left: max(8px, env(safe-area-inset-left)); right: max(8px, env(safe-area-inset-right)); }
+  .room-header .room-title { grid-template-columns: 44px minmax(0, 1fr) 44px; gap: 2px; padding-inline: 0; }
+  .room-title h1 { min-width: 0; white-space: normal; overflow-wrap: anywhere; font-size: clamp(23px, 7cqw, 32px); }
+  .phone { left: max(8px, env(safe-area-inset-left)); }
+  .closet, .side-object.lab-experiments { right: max(8px, env(safe-area-inset-right)); }
+  .side-object, .side-object.lamp { width: clamp(54px, 16cqw, 76px); grid-template-rows: clamp(44px, 9cqh, 65px) auto; }
+  .side-object span { font-size: clamp(13px, 4cqw, 18px); line-height: 1.1; }
+  .bottom-tools { width: calc(100% - max(16px, env(safe-area-inset-left)) - max(16px, env(safe-area-inset-right))); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; bottom: calc(max(0px, env(safe-area-inset-bottom)) + 34px); }
+  .bottom-tools > .image-button { width: 100%; min-width: 0; grid-template-rows: var(--footer-icon) minmax(28px, auto); gap: 3px; }
+  .bottom-tools .image-button span { max-width: 100%; white-space: normal; overflow-wrap: anywhere; line-height: 1.05; text-align: center; }
+  .room-dots { width: min(100%, 308px); bottom: max(2px, env(safe-area-inset-bottom)); }
+  .room-dots button { width: min(13vw, 44px); min-width: 0; }
+  .save-indicator { font-size: 9px; bottom: max(2px, env(safe-area-inset-bottom)); right: max(4px, env(safe-area-inset-right)); }
+  .item-tray { z-index: 12; left: 17%; right: 17%; bottom: var(--footer-clearance); height: clamp(75px, 13cqh, 108px); }
+  .current-item { min-width: 0; }
+  .current-item > .image-button { height: 65%; min-height: 44px; }
+  .item-label { max-width: 100%; white-space: normal; overflow-wrap: anywhere; font-size: clamp(13px, 4cqw, 19px); line-height: 1.05; }
+  .item-count { font-size: clamp(12px, 3.5cqw, 17px); }
+  .bathroom .bath-tools { left: 6%; right: 6%; bottom: calc(var(--footer-clearance) + 20px); height: clamp(72px, 12cqh, 100px); }
+  .bathroom .bath-tools button { width: 24%; min-width: 48px; }
+  .bath-tools span { font-size: clamp(14px, 4cqw, 20px); }
+  .bathroom .clean-meter { top: auto; bottom: calc(var(--footer-clearance) + 34px); width: 34%; font-size: clamp(12px, 3.2cqw, 16px); }
+  .bath-hint { bottom: var(--footer-clearance); left: 4%; right: 4%; font: 600 clamp(10px, 2.8cqw, 12px)/1.2 system-ui, sans-serif; }
+  .pou-dialog { width: min(94vw, 620px); max-height: min(88dvh, calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 16px)); }
+  .dialog-heading { padding: 8px 12px; }
+  .dialog-body { max-height: calc(88dvh - 64px); }
+  .game-score { padding: 0 3px; font-size: clamp(11px, 3.7vw, 16px); }
+  .game-score span { min-width: 0; white-space: nowrap; }
+}
+
+@media (max-height: 480px) and (orientation: landscape) {
+  .playfield { --footer-clearance: calc(max(0px, env(safe-area-inset-bottom)) + 88px); }
+  .room-header .room-title { min-height: 36px; }
+  .room-title .image-button { width: 40px; height: 36px; padding: 8px; }
+  .item-tray { z-index: 12; bottom: var(--footer-clearance); height: clamp(54px, 21cqh, 82px); }
+  .current-item > .image-button { min-height: 40px; }
+  .item-label { font-size: clamp(12px, 4cqh, 17px); line-height: 1.05; }
+  .bathroom .bath-tools { bottom: calc(var(--footer-clearance) + 12px); height: clamp(54px, 20cqh, 76px); }
+  .bathroom .clean-meter { top: auto; bottom: calc(var(--footer-clearance) + 24px); font-size: 12px; }
+  .bath-hint { bottom: var(--footer-clearance); font: 600 10px/1.2 system-ui, sans-serif; }
+  .side-object, .side-object.lamp { grid-template-rows: 44px auto; gap: 2px; width: 60px; }
+  .side-object span { font-size: 13px; line-height: 1.1; }
+}
