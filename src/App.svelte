@@ -15,7 +15,7 @@
   import { consumePotion,revivePou } from './lib/experiments';
   import { pointOnPou, rinseFoam, type FoamBubble } from './lib/bath';
   import { gazeAt, roomPouGeometry, type Point } from './lib/pou-geometry';
-  import { ROOMS, advance, clamp, earn, enforceRest,isExhausted,level, levelProgress, newSave, parseSave, spend, type Save, type Stat } from './lib/model';
+  import { ROOMS, INDOOR_ROOMS, OUTDOOR_ROOMS, isOutdoor, advance, clamp, earn, enforceRest,isExhausted,collectPoop,updateBathroom,level, levelProgress, newSave, parseSave, spend, type Save, type Stat } from './lib/model';
   import { emergencySave, exportSave, importSave, loadSave, saveProgress } from './lib/storage';
   import { audio } from './lib/audio';
   import {language} from './lib/language';
@@ -26,10 +26,10 @@
   let ready = $state(false), fatal = $state(''), warning = $state('');
   let catalog = $state<Catalog>({ images: {}, sounds: {} });
   let roomIndex = $state(0);
-  const room = $derived(ROOMS[roomIndex]);
+  const room = $derived(ROOMS[roomIndex] ?? 'Kitchen');
   const idLang=$derived(save.settings.language==='id');
   const tr=(en:string,id:string)=>idLang?id:en;
-  const roomLabel=(value:string)=>idLang?({Kitchen:'Dapur',Bathroom:'Kamar Mandi',Lab:'Lab','Game Room':'Ruang Bermain',Bedroom:'Kamar Tidur',Garden:'Kebun',Playground:'Taman Bermain'} as Record<string,string>)[value]??value:value;
+  const roomLabel=(value:string)=>idLang?({Kitchen:'Dapur',Bathroom:'Kamar Mandi',Lab:'Lab','Game Room':'Ruang Bermain',Bedroom:'Kamar Tidur',Hall:'Aula',Garden:'Kebun',Playground:'Taman Bermain'} as Record<string,string>)[value]??value:value;
   let modal = $state(''), shopCategory = $state('food');
   let query = $state(''), foodIndex = $state(0), potionIndex = $state(0);
   let eating = $state(0), toast = $state(''), saveStatus = $state('Saved');
@@ -40,6 +40,7 @@
   let audioUnlocked=$state(false),spinRemaining=$state(0);
   const spinUntil=$derived(save.effects.spinUntil);
   const exhausted=$derived(isExhausted(save));
+  const bodyScale=$derived(save.bodySize * (save.world.lab.effect.kind==='tiny' && save.world.lab.effect.until>Date.now() && save.life.state!=='dead' ? .65 : 1));
   let drag = $state<{ kind: string; x: number; y: number; startX: number; startY: number; pointerId: number; moved: boolean } | null>(null);
   let cleanMode = $state(false), rinse = $state(false), bubbles = $state<FoamBubble[]>([]);
   let water = $state<Point | null>(null), foreground = $state(true);
@@ -57,6 +58,7 @@
   let toastTimer: ReturnType<typeof setTimeout>;
   let mediaStream: MediaStream | undefined, mediaRecorder: MediaRecorder | undefined;
   let recordTimer: ReturnType<typeof setTimeout> | undefined, audioContext: AudioContext | undefined;
+  let speechSource: AudioBufferSourceNode | undefined;
   const foods = $derived(Object.keys(save.food).filter(k => save.food[k] > 0));
   const food = $derived(foods[foodIndex % (foods.length || 1)] ?? '');
   const potion = $derived(POTIONS[potionIndex % POTIONS.length]);
@@ -93,19 +95,25 @@
   }
   function requireRest(){
     if(!isExhausted(save))return false;
-    commit(()=>{});notify('Pou terlalu lelah. Biarkan tidur sampai energi minimal 20%.');audio.play('no');return true;
+    commit(()=>{});notify('Pou terlalu lelah. Biarkan tidur sampai energi minimal 20%.');audio.play('no', 0.7, 1.25 - save.bodySize * 0.25);return true;
   }
   function setRoom(index: number) {
     if (drag || recording) return;
     roomIndex = (index + ROOMS.length) % ROOMS.length;
     resetBath(); audio.play('click');
   }
-  function navigate(direction: number) { setRoom(roomIndex + direction); }
-  function trackGaze(event: PointerEvent) {
-    const rect = playingField.getBoundingClientRect();
-    gaze = gazeAt({ x: event.clientX - rect.left, y: event.clientY - rect.top }, roomPouGeometry(rect.width, rect.height));
+  function navigate(direction: number) {
+    const list = isOutdoor(room) ? OUTDOOR_ROOMS : INDOOR_ROOMS;
+    const currentSubIndex = list.indexOf(room as any);
+    const nextRoom = list[(currentSubIndex + direction + list.length) % list.length];
+    setRoom(ROOMS.indexOf(nextRoom));
   }
-  function resetBath() { cleanMode = false; rinse = false; water = null; bubbles = []; washPointer = null; audio.stopShower(); }
+  function trackGaze(event: PointerEvent) {
+    if (!playingField || typeof gazeAt === 'undefined' || typeof roomPouGeometry === 'undefined') return;
+    const rect = playingField.getBoundingClientRect();
+    gaze = gazeAt({ x: event.clientX - rect.left, y: event.clientY - rect.top }, roomPouGeometry(rect.width, rect.height, bodyScale));
+  }
+  function resetBath() { cleanMode = false; rinse = false; water = null; bubbles = []; washPointer = null; washRewardEligible = false; audio.stopShower(); }
   function open(name: string) { query = ''; modal = name; audio.play('click'); if (name === 'profile') renamed = save.name; }
   function closeMenu() { importFile = null; importPreview = null; importError = ''; modal = ''; }
   function openShop(category: string) { shopCategory = category; open('shop'); }
@@ -120,10 +128,10 @@
     if(save.life.state==='dead'){notify('Hidupkan kembali Pou terlebih dahulu.');return;}
     if(requireRest())return;
     if (!food) { openShop('food'); return; }
-    if (save.sleeping) { notify('Pou is sleeping!'); audio.play('no'); return; }
-    if (save.stats.fullness > 95) { notify('Pou is full!'); audio.play('no'); return; }
+    if (save.sleeping) { notify('Pou is sleeping!'); audio.play('no', 0.7, 1.25 - save.bodySize * 0.25); return; }
+    if (save.stats.fullness >= 30 && (Math.random() <= .1 || save.stats.fullness >= 90 && (save.obesity >= 100 || Math.random() <= save.obesity / 100))) { notify('Pou is full!'); audio.play('naa22', 0.8, 1.25 - save.bodySize * 0.25); return; }
     const key = food;
-    commit(s => { s.food[key]--; s.stats.fullness = clamp(s.stats.fullness + foodNutrition(key)); s.stats.clean = clamp(s.stats.clean - 2); s.counters.fed++;care(s,'food',key); s.xp += 5; if (key === 'chili_pepper') s.stats.health = clamp(s.stats.health - 10); });
+    commit(s => { const nutrition=foodNutrition(key),fullness=s.stats.fullness+nutrition; s.food[key]--; s.obesity=clamp(s.obesity+Math.max(0,fullness-100)); s.stats.fullness = clamp(fullness); s.bodySize = Math.min(1, s.bodySize + nutrition * 0.0002976); updateBathroom(s, 1_800_000); s.counters.fed++;care(s,'food',key); earn(s,0,5); if (key === 'chili_pepper') s.stats.health = clamp(s.stats.health - 30); });
     if(favoriteFood(save)===key)notify(tr(`${foodName('en',key)} is ${save.name}'s favorite!`,`${foodName('id',key)} favorit ${save.name}!`));
     eating = Date.now() + 700; audio.play(`eat_${1 + Math.floor(Math.random() * 3)}`);
   }
@@ -136,24 +144,40 @@
   function toggleSleep() {
     if(save.life.state==='dead'){open('experiments');return;}
     if(requireRest())return;
-    commit(s => s.sleeping = !s.sleeping); audio.play('click');
-    if (save.sleeping) notify('Good night, Pou!');
+    const waking = save.sleeping;
+    commit(s => {
+      s.sleeping = !s.sleeping;
+      if (waking && s.stats.energy >= 100) earn(s, 0, 50);
+    });
+    audio.play('click');
+    if (waking) {
+      audio.play('a2mmn', 0.8, 1.25 - save.bodySize * 0.25);
+    } else {
+      notify('Good night, Pou!');
+    }
   }
   function dragStart(event: PointerEvent, kind: string) {
     if (drag || event.isPrimary === false || event.button > 0) return;
     if(save.life.state==='dead'){open('experiments');return;}
-    if(kind!=='potion'&&(requireRest()||save.sleeping)){if(save.sleeping&&!isExhausted(save))notify('Pou sedang tidur. Bangunkan dulu.');return;}
+    if(kind!=='potion'&&(requireRest()||save.sleeping)){
+      if(save.sleeping&&!isExhausted(save)){
+        notify('Pou sedang tidur. Bangunkan dulu.');
+        audio.play('no', 0.7, 1.25 - save.bodySize * 0.25);
+      }
+      return;
+    }
     if (kind === 'food' && !food) { openShop('food'); return; }
     const target = event.currentTarget as HTMLElement;
     target.setPointerCapture(event.pointerId);
     drag = { kind, x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, pointerId: event.pointerId, moved: false };
     if (kind === 'soap') { water = null; if (rinse) { cleanMode = false; rinse = false; } }
-    if (kind === 'shower') { if (save.stats.clean < 95) washRewardEligible = true; positionShower(event.clientX, event.clientY); }
+    if (kind === 'shower') positionShower(event.clientX, event.clientY);
   }
   function dragMove(event: PointerEvent) {
     if (!drag || event.pointerId !== drag.pointerId) return;
     if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 6) drag.moved = true;
     drag.x = event.clientX; drag.y = event.clientY;
+    trackGaze(event);
     if (drag.kind === 'soap') cleanAt(event.clientX, event.clientY);
     if (drag.kind === 'shower') positionShower(event.clientX, event.clientY);
   }
@@ -170,7 +194,7 @@
       if (moved || cleanMode && rinse) { cleanMode = false; rinse = false; water = null; }
       else if (!save.sleeping) { cleanMode = true; rinse = true; water = { x: 50, y: 30 }; notify('Shower on! Tap Shower again to stop.'); }
     }
-    if (kind === 'ball') { commit(s => { s.stats.fun = clamp(s.stats.fun + 4); s.xp += 1; }); ballKick(event.clientX, event.clientY); }
+    if (kind === 'ball') { commit(s => { s.stats.fun = clamp(s.stats.fun + 2.5); s.stats.energy = clamp(s.stats.energy - 0.2); }); ballKick(event.clientX, event.clientY); }
   }
   function cancelDrag(event?: PointerEvent) {
     if (event && drag && event.pointerId !== drag.pointerId) return;
@@ -187,23 +211,31 @@
     if (!bathActive || Date.now() - lastClean < 70) return;
     const r = playingField.getBoundingClientRect();
     const px = (x - r.left) / r.width * 100, py = (y - r.top) / r.height * 100;
-    if (!pointOnPou({ x: px, y: py }, r.width, r.height)) return;
+    if (!pointOnPou({ x: px, y: py }, r.width, r.height, bodyScale)) return;
+    if (save.stats.clean < 95) washRewardEligible = true;
     lastClean = Date.now();
     const cluster: FoamBubble[] = [];
     for (let i = 0; i < 3; i++) {
       const point = { x: px + (Math.random() - 0.5) * 4, y: py + (Math.random() - 0.5) * 3 };
-      if (pointOnPou(point, r.width, r.height)) cluster.push({ ...point, id: bubbleId++ });
+      if (pointOnPou(point, r.width, r.height, bodyScale)) cluster.push({ ...point, id: bubbleId++ });
     }
     bubbles = [...bubbles, ...cluster].slice(-48);
   }
+  function cleanPoop() {
+    if (!bathActive || save.bathroom.poops < 1) return;
+    commit(s => { collectPoop(s); });
+    audio.play('coin'); notify('+5 coins!');
+  }
   function rinsePou(seconds: number) {
     if (!bathActive || !water || save.sleeping || isExhausted(save)) return;
+    const hadFoam = bubbles.length > 0;
     bubbles = rinseFoam(bubbles, water);
-    if (save.stats.clean >= 100 && !washRewardEligible) return;
+    if (!hadFoam || bubbles.length > 0) return;
     commit(s => {
-      s.stats.clean = clamp(s.stats.clean + Math.min(seconds, 0.5) * 12);
-      if (s.stats.clean >= 100 && washRewardEligible) {
-        washRewardEligible = false; s.counters.washed++;care(s,'bath'); s.xp += 10; earn(s, 5);
+      s.stats.clean = 100; s.world.lab.soot = false;
+      if (washRewardEligible) {
+        washRewardEligible = false; s.counters.washed++;care(s,'bath'); earn(s,5,15);
+        audio.play?.('potion', 0.8);
         notify('Squeaky clean! +5 coins');
       }
     });
@@ -232,7 +264,7 @@
     const price = shopCategory === 'food' ? foodPrice(id) : shopCategory === 'wallpapers' ? 50 : 100;
     const owned = save.owned.includes(key);
     if (shopCategory !== 'food' && owned) { equip(key); return; }
-    if (save.coins < price) { notify('Not enough coins. Play games to earn more!'); audio.play('no'); return; }
+    if (save.coins < price) { notify('Not enough coins. Play games to earn more!'); audio.play('no', 0.7, 1.25 - save.bodySize * 0.25); return; }
     commit(s => { spend(s, price); if (shopCategory === 'food') s.food[id] = (s.food[id] ?? 0) + 1; else s.owned.push(key); });
     if (shopCategory !== 'food') equip(key);
     audio.play('buy');
@@ -257,8 +289,10 @@
   }
   function finishGame(id: string, score: number, bonusCoins = 0) {
     if(save.life.state==='dead')return 0;
-    const reward = Math.min(200, Math.floor(score / 3)) + Math.max(0, Math.floor(bonusCoins));
-    commit(s => { earn(s, reward, Math.min(50, Math.floor(score / 2))); s.scores[id] = Math.max(s.scores[id] ?? 0, score); s.counters.played++;care(s,'game'); s.stats.fun = clamp(s.stats.fun + 15); s.stats.energy = clamp(s.stats.energy - 3); s.stats.fullness = clamp(s.stats.fullness - 2); });
+    const collected = Math.max(0, Math.floor(bonusCoins));
+    const baseReward = ['food-drop', 'sky-jump', 'free-fall', 'jet-pou', 'memory'].includes(id) ? 0 : Math.min(200, Math.floor(score / 3));
+    const reward = baseReward + collected;
+    commit(s => { earn(s, baseReward, baseReward === 0 && ['food-drop', 'sky-jump', 'free-fall', 'jet-pou', 'memory'].includes(id) ? collected : Math.min(50, Math.floor(score / 2))); s.scores[id] = Math.max(s.scores[id] ?? 0, score); s.counters.played++;care(s,'game'); s.stats.fun = clamp(s.stats.fun + 15); s.stats.energy = clamp(s.stats.energy - 3); s.stats.fullness = clamp(s.stats.fullness - 2); });
     return reward;
   }
   function openLocalGame(item:GameInfo){if(save.life.state==='dead'){open('experiments');return;}if(requireRest())return;if(save.sleeping){notify('Wake Pou up first!');return;}modal='';game=item;}
@@ -287,6 +321,10 @@
     try { save = await importSave(importFile); importFile = null; importPreview = null; modal = 'settings'; notify('Progress restored!'); }
     catch (error) { importError = error instanceof Error ? error.message : 'Impor gagal.'; }
   }
+  function stopSpeech() {
+    try { speechSource?.stop(); } catch { /* Playback already finished. */ }
+    speechSource?.disconnect(); speechSource = undefined;
+  }
   async function microphone() {
     if (recording) { mediaRecorder?.stop(); return; }
     if(requireRest()||save.sleeping)return;
@@ -300,13 +338,30 @@
       mediaRecorder.ondataavailable = event => chunks.push(event.data);
       mediaRecorder.onstop = async () => {
         clearTimeout(recordTimer); recording = false; mediaStream?.getTracks().forEach(track => track.stop());
-        if(isExhausted(save)||save.sleeping)return;
+        if(isExhausted(save)||save.sleeping||!save.settings.sound||!foreground)return;
         try {
           audioContext ??= new AudioContext(); await audioContext.resume();
           const data = await new Blob(chunks, { type: mediaRecorder?.mimeType }).arrayBuffer();
           const buffer = await audioContext.decodeAudioData(data);
-          const source = audioContext.createBufferSource(); source.buffer = buffer; source.playbackRate.value = 1.35; source.connect(audioContext.destination); source.start();
-          eating = Date.now() + buffer.duration / 1.35 * 1000;
+          if(!save.settings.sound||!foreground||isExhausted(save)||save.sleeping)return;
+          stopSpeech();
+          const source = audioContext.createBufferSource(); source.buffer = buffer; source.playbackRate.value = 2.0;
+          const gainNode = typeof audioContext.createGain === 'function' ? audioContext.createGain() : null;
+          if (gainNode) {
+            gainNode.gain.value = 2.0;
+            source.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+          } else {
+            source.connect(audioContext.destination);
+          }
+          speechSource = source;
+          source.onended = () => {
+            if (speechSource === source) speechSource = undefined;
+            source.disconnect();
+            gainNode?.disconnect();
+          };
+          source.start();
+          eating = Date.now() + (buffer.duration / 2.0) * 1000;
         } catch { microphoneError = 'Rekaman tidak dapat diputar. Coba lagi.'; }
       };
       mediaRecorder.start(); recording = true;
@@ -329,14 +384,46 @@
     } catch { offlineStatus = 'Unduhan terhenti. Coba lagi; aset yang sudah tersimpan tetap dipakai.'; }
     offlineBusy = false;
   }
+  const FLOWER_COUNT = 5;
+  const WITHER_INTERVAL = 21_600_000;
+  function getFlowerState(plotIndex: number) {
+    const watered = save.garden.wateredAt || 0;
+    const offset = plotIndex * 1_800_000;
+    const withered = !watered || Date.now() - watered > (WITHER_INTERVAL - offset);
+    return { id: plotIndex + 1, withered };
+  }
+  function waterFlower(plotIndex: number) {
+    const flower = getFlowerState(plotIndex);
+    if (!flower.withered) {
+      notify(tr('This flower is blooming fresh!', 'Bunga ini sedang mekar segar!'));
+      return;
+    }
+    commit(s => {
+      s.garden.wateredAt = Date.now();
+      earn(s, 5, 15);
+    });
+    audio.play('water_splash');
+    notify(tr('Flower watered! +5 coins, +15 XP', 'Bunga disiram! +5 koin, +15 XP'));
+  }
   function waterGarden() {
-    const now = Date.now();
-    if (save.garden.wateredAt && now - save.garden.wateredAt < 3_600_000) { notify('The flowers are growing!'); return; }
-    commit(s => { s.garden.wateredAt = now; s.xp += 2; }); audio.play('water_splash'); notify('Come back in one hour!');
+    let witheredCount = 0;
+    for (let i = 0; i < FLOWER_COUNT; i++) {
+      if (getFlowerState(i).withered) witheredCount++;
+    }
+    if (witheredCount === 0) {
+      notify(tr('The flowers are growing fresh!', 'Bunga-bunga sedang mekar segar!'));
+      audio.play('water_splash');
+      return;
+    }
+    commit(s => {
+      s.garden.wateredAt = Date.now();
+      earn(s, 5 * witheredCount, 15 * witheredCount);
+    });
+    audio.play('water_splash');
+    notify(tr(`Watered ${witheredCount} flowers! +${5 * witheredCount} coins, +${15 * witheredCount} XP`, `Menyiram ${witheredCount} bunga! +${5 * witheredCount} koin, +${15 * witheredCount} XP`));
   }
   function harvest() {
-    if (!save.garden.wateredAt || Date.now() - save.garden.wateredAt < 3_600_000 || save.garden.harvestedAt >= save.garden.wateredAt) { waterGarden(); return; }
-    commit(s => { s.garden.harvestedAt = Date.now(); earn(s, 20, 5); }); audio.play('coin'); notify('+20 coins!');
+    waterGarden();
   }
   const achievementList = $derived([
     { title: 'Feed Pou', count: save.counters.fed, goal: 10, icon: '100.png' },
@@ -357,8 +444,8 @@
     const visibility = () => {
       foreground = !document.hidden;
       if (!ready) return;
-      if (document.hidden) { cancelDrag(); emergencySave($state.snapshot(save)); persist(); audio.pause(); }
-      else { save = advance(parseSave($state.snapshot(save))); audio.resume();multiplayer.connect(save.name); }
+      if (document.hidden) { cancelDrag(); stopSpeech(); emergencySave($state.snapshot(save)); persist(); audio.pause(); }
+      else { save = advance(parseSave($state.snapshot(save))); if(!game)audio.resume();multiplayer.connect(save.name); }
     };
     const hide = () => { if (ready) emergencySave($state.snapshot(save)); };
     const unlock = () => { audio.unlock();audioUnlocked=true;void navigator.storage?.persist?.().catch(() => {}); };
@@ -373,16 +460,25 @@
       if (!document.hidden && (ball.vx || ball.vy)) {
         ball.vy += dt * 55; ball.x += ball.vx * dt; ball.y += ball.vy * dt;
         if (ball.x < 7 || ball.x > 93) { ball.x = clamp(ball.x, 7, 93); ball.vx *= -0.85; }
-        if (ball.y > 80) { ball.y = 80; ball.vy *= -0.72; ball.vx *= 0.95; if (Math.abs(ball.vy) < 2) { ball.vy = 0; ball.vx = 0; } }
+        if (ball.y > 80) {
+          ball.y = 80;
+          if (Math.abs(ball.vy) > 10) audio.play?.('ball2', 0.35);
+          ball.vy *= -0.72; ball.vx *= 0.95;
+          if (Math.abs(ball.vy) < 2) { ball.vy = 0; ball.vx = 0; }
+        }
+        if (playingField && (room === 'Game Room' || room === 'Playground')) {
+          const rect = playingField.getBoundingClientRect();
+          gaze = gazeAt({ x: ball.x / 100 * rect.width, y: ball.y / 100 * rect.height }, roomPouGeometry(rect.width, rect.height, bodyScale));
+        }
       }
       frame = requestAnimationFrame(moveBall);
     };
     frame = requestAnimationFrame(moveBall);
-    return () => { alive = false;unsubscribe();multiplayer.close();audio.stop(); clearInterval(timer); clearTimeout(toastTimer); clearTimeout(recordTimer); cancelAnimationFrame(frame); mediaStream?.getTracks().forEach(t => t.stop()); void audioContext?.close(); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('pagehide', hide); window.removeEventListener('blur', blur); window.removeEventListener('resize', blur); document.removeEventListener('pointerdown', unlock); };
+    return () => { alive = false;unsubscribe();multiplayer.close();audio.stop();stopSpeech(); clearInterval(timer); clearTimeout(toastTimer); clearTimeout(recordTimer); cancelAnimationFrame(frame); mediaStream?.getTracks().forEach(t => t.stop()); void audioContext?.close(); document.removeEventListener('visibilitychange', visibility); window.removeEventListener('pagehide', hide); window.removeEventListener('blur', blur); window.removeEventListener('resize', blur); document.removeEventListener('pointerdown', unlock); };
   });
   $effect(()=>{if(ready){multiplayer.setName(save.name);document.documentElement.lang=save.settings.language;language.set(save.settings.language);}});
   $effect(()=>{if(ready)multiplayer.publishHome($state.snapshot(save.world.home),save.appearance.body,save.appearance.eyes);});
-  $effect(() => { audio.setSound(save.settings.sound); audio.music = save.settings.music; });
+  $effect(() => { audio.setSound(save.settings.sound); audio.music = save.settings.music; if(!save.settings.sound)stopSpeech(); });
   $effect(() => { if (bathActive && water && save.settings.sound) audio.startShower(); else audio.stopShower(); });
   $effect(()=>{if(audioUnlocked&&foreground&&save.sleeping&&save.settings.sound&&save.life.state!=='dead'&&!game&&!online)audio.startSnore();else audio.stopSnore();});
   $effect(()=>{
@@ -403,7 +499,7 @@
 {#if !ready}
   <main class="loading"><img src={imageUrl('pou/icon150.png')} alt="Pou" /><h1>Pou</h1><p>{fatal ? localMessage($language,fatal) : tr('Loading…','Memuat…')}</p>{#if fatal}<button class="green-button" onclick={() => location.reload()}>{translate($language,"Coba lagi","Try again")}</button>{/if}</main>
 {:else}
-  <main class:night={save.sleeping && room === 'Bedroom'} class:outside={room === 'Garden' || room === 'Playground'} class="game-shell" style={`--room-color: ${{ Kitchen: '#efd391', Bathroom: '#b8e8e3', Lab: '#d8bee5', 'Game Room': '#ccea80', Bedroom: '#a9cee5', Garden: '#91d9f7', Playground: '#91d9f7' }[room]}; ${save.wallpapers[room] ? `--wallpaper: url("${imageUrl(save.wallpapers[room]!)}")` : ''}`}>
+  <main class:night={save.sleeping && room === 'Bedroom'} class:outside={isOutdoor(room)} class="game-shell" style={`--room-color: ${{ Kitchen: '#efd391', Bathroom: '#b8e8e3', Lab: '#d8bee5', 'Game Room': '#ccea80', Bedroom: '#a9cee5', Hall: '#e8dcba', Garden: '#91d9f7', Playground: '#91d9f7' }[room]}; ${save.wallpapers[room] ? `--wallpaper: url("${imageUrl(save.wallpapers[room]!)}")` : ''}`}>
     <section class="playfield" class:poison-spin={spinRemaining>0} class:still-effects={save.settings.reducedMotion} class:bathroom={room === 'Bathroom'} style={`--spin-duration:${spinRemaining}ms`} bind:this={playingField} aria-label={roomLabel(room)} onpointermove={trackGaze} onpointerdowncapture={trackGaze} onpointerleave={() => gaze = { x: 0, y: 0 }}>
       <div class="room-header">
       <header class="hud">
@@ -425,16 +521,22 @@
       <button class="phone image-button" aria-label={tr("Phone menu","Menu telepon")} onclick={() => open('phone')}><img src={imageUrl('phones/100/black.png')} alt="" /></button>
       <button class="closet image-button" aria-label={tr("Customize Pou","Ubah penampilan Pou")} onclick={() => openShop('body')}><img src={imageUrl('closets/closet.png')} alt="" /></button>
       {#if room === 'Bedroom'}<div class="pillow" aria-hidden="true">{#each [1,2,3] as layer}<img class={`pillow-layer layer-${layer}`} src={imageUrl(`pillows/100/l${layer}.png`)} alt="" />{/each}</div>{/if}
-      {#if room === 'Garden' || room === 'Playground'}<div class="grass"></div>{/if}
+      {#if isOutdoor(room)}<div class="grass"></div>{/if}
       <FurnitureLayer placements={save.world.home.placements} {room}/>
       <div class="pou-position"><Pou {save} {eating} {gaze} onpet={pet} /></div>
       {#if save.sleeping}<SleepEffects reducedMotion={save.settings.reducedMotion} {exhausted} energy={save.stats.energy}/>{/if}
       {#if spinRemaining>0}<div class="spin-status" role="status">{tr('Racun Pusaran · 5 detik','Spin Poison · 5 seconds')} <button onclick={()=>open('experiments')}>{translate($language,"Penawar","Antidote")}</button></div>{/if}
+      {#if save.world.lab.effect.kind==='blast' && save.world.lab.effect.until>Date.now()}
+        {#key save.world.lab.effect.until}<div class="lab-blast" class:reduced={save.settings.reducedMotion} aria-hidden="true"><div class="lab-blast-core"></div><span>BOOM!</span></div>{/key}
+      {/if}
       {#if save.life.state==='poisoned'}<div class="poison-status" role="status">{tr('Racun Alien','Alien Poison')} · {Math.ceil(save.life.poisonSeconds)}s <button onclick={()=>open('experiments')}>{translate($language,"Penawar","Antidote")}</button></div>{/if}
       {#if save.life.state==='dead'}<div class="life-status"><p>{translate($language,"Pou meninggal","Pou has died")}</p><button class="green-button" onclick={()=>commit(revivePou)}>{translate($language,"Hidupkan kembali","Revive")}</button></div>{/if}
       {#if room === 'Bathroom'}
         {#if cleanMode}<button class="wash-surface" aria-label={rinse ? tr('Rinse Pou','Bilas Pou') : tr('Wash Pou','Mandikan Pou')} onpointerdown={washStart} onpointermove={washMove} onpointerup={washEnd} onpointercancel={cancelDrag} onlostpointercapture={(e) => { if (washPointer === e.pointerId) cancelDrag(e); }}></button>{/if}
-        <BathEffects {water} {bubbles} active={bathActive} reducedMotion={save.settings.reducedMotion} onrinse={rinsePou} />
+        <BathEffects {water} {bubbles} active={bathActive} reducedMotion={save.settings.reducedMotion} bodySize={bodyScale} onrinse={rinsePou} />
+        {#each Array(Math.min(save.bathroom.poops, 3)) as _, index}
+          <button class="bath-poop image-button" style={`--poop-x:${[32, 68, 22][index]}%`} aria-label={tr('Clean poop for 5 coins','Bersihkan eek untuk 5 koin')} onclick={cleanPoop}><img src={imageUrl('poop/red.png')} alt="" /></button>
+        {/each}
         <div class="clean-meter"><span>{translate($language,"Bersih","Clean")} {Math.round(save.stats.clean)}%</span><progress value={save.stats.clean} max="100"></progress></div>
       {/if}
       {#if room === 'Kitchen'}
@@ -446,11 +548,25 @@
         <button class="side-object image-button" aria-label={tr("Open games","Buka permainan")} onclick={() => open('games')}><img src={imageUrl('room/joystick.png')} alt="" /><span class="outlined">{translate($language,"Permainan","Games")}</span></button>
       {:else if room === 'Bedroom'}
         <button class="side-object image-button lamp" aria-label={save.sleeping ? tr('Wake Pou up','Bangunkan Pou') : tr('Put Pou to sleep','Tidurkan Pou')} onclick={toggleSleep}><img src={imageUrl(`lamps/100/light_${save.sleeping ? 'off' : 'on'}.png`)} alt="" /><span class="outlined">{exhausted?'Zzz…':save.sleeping ? tr('Wake up','Bangun') : tr('Sleep','Tidur')}</span></button>
+      {:else if room === 'Hall'}
+        <button class="side-object image-button" aria-label={tr("Go outside","Keluar ke halaman")} onclick={() => setRoom(ROOMS.indexOf('Garden'))}><img src={imageUrl('room/door.png')} alt="" /><span class="outlined">{tr("Outside","Luar")}</span></button>
+        <button class="side-object image-button hall-micro" class:recording aria-label={recording ? tr('Stop recording','Hentikan rekaman') : tr('Talk to Pou','Bicara dengan Pou')} onclick={microphone}><img src={imageUrl('room/micro.png')} alt="" /><span class="outlined">{recording ? tr('Stop','Berhenti') : tr('Talk','Bicara')}</span></button>
       {:else if room === 'Garden'}
-        <button class="side-object image-button" aria-label={tr("Water garden","Siram kebun")} onclick={waterGarden}><img src={imageUrl('showers/100/white.png')} alt="" /><span class="outlined">{translate($language,"Siram","Water")}</span></button>
-        <button class="garden-flower image-button" aria-label={tr("Harvest flowers","Panen bunga")} onclick={harvest}><img src={imageUrl('flowers/1.png')} alt="" /></button>
+        <button class="side-object image-button" aria-label={tr("Enter house","Masuk rumah")} onclick={() => setRoom(ROOMS.indexOf('Hall'))}><img src={imageUrl('room/door.png')} alt="" /><span class="outlined">{tr("Inside","Masuk")}</span></button>
+        <button class="side-object image-button garden-can" aria-label={tr("Water flowers","Siram bunga")} onclick={waterGarden}><img src={imageUrl('showers/100/white.png')} alt="" /><span class="outlined">{translate($language,"Siram","Water")}</span></button>
+        <div class="garden-plots" aria-label={tr("Garden flowers","Bunga kebun")}>
+          {#each Array(FLOWER_COUNT) as _, i}
+            {@const flower = getFlowerState(i)}
+            <button class="garden-plot" class:withered={flower.withered} aria-label={`${tr('Flower','Bunga')} ${i + 1} (${flower.withered ? tr('Withered · Tap to water','Layu · Ketuk untuk siram') : tr('Blooming','Mekar')})`} onclick={() => waterFlower(i)}>
+              <img class="dirt" src={imageUrl('flowers/dirt.png')} alt="" />
+              <img class="stem" src={imageUrl(`flowers/stem${i + 1}.png`)} alt="" />
+              <img class="head" src={imageUrl(`flowers/${i + 1}.png`)} alt="" />
+            </button>
+          {/each}
+        </div>
       {:else if room === 'Playground'}
-        <button class="side-object image-button" aria-label={tr("Play Goal","Main Goal")} onclick={() => openLocalGame(GAMES.find(g => g.id === 'goal')!)}><img src={imageUrl('room/joystick.png')} alt="" /><span class="outlined">Goal</span></button>
+        <button class="side-object image-button" aria-label={tr("Enter house","Masuk rumah")} onclick={() => setRoom(ROOMS.indexOf('Hall'))}><img src={imageUrl('room/door.png')} alt="" /><span class="outlined">{tr("Inside","Masuk")}</span></button>
+        <button class="side-object image-button playground-goal" aria-label={tr("Play Goal","Main Goal")} onclick={() => openLocalGame(GAMES.find(g => g.id === 'goal')!)}><img src={imageUrl('room/joystick.png')} alt="" /><span class="outlined">Goal</span></button>
       {/if}
       {#if room === 'Kitchen' || room === 'Lab'}
         <div class="item-tray">
@@ -470,7 +586,7 @@
         </div>
         <p class="bath-hint">{cleanMode ? rinse ? tr('Tap Shower to stop · Drag to aim','Ketuk Shower untuk berhenti · Seret untuk mengarahkan') : tr('Rub Pou, then rinse with Shower','Gosok Pou, lalu bilas dengan Shower') : tr('Soap to lather · Shower to rinse','Sabun untuk busa · Shower untuk membilas')}</p>
       {:else if room === 'Game Room' || room === 'Playground'}
-        <button class="ball image-button draggable" style={`left:${ball.x}%;top:${ball.y}%`} aria-label={tr("Play with ball","Main bola")} onpointerdown={(e) => dragStart(e, 'ball')} onpointermove={dragMove} onpointerup={dragEnd} onpointercancel={cancelDrag} onlostpointercapture={lostDrag}><img src={imageUrl('balls/300/l1.png')} alt="" /></button>
+        <button class="ball image-button draggable" class:dragged-hidden={drag?.kind === 'ball' && drag.moved} style={`left:${ball.x}%;top:${ball.y}%`} aria-label={tr("Play with ball","Main bola")} onpointerdown={(e) => dragStart(e, 'ball')} onpointermove={dragMove} onpointerup={dragEnd} onpointercancel={cancelDrag} onlostpointercapture={lostDrag}><img src={imageUrl('balls/300/l1.png')} alt="" /></button>
       {/if}
       <div class="bottom-tools">
         <button class="image-button" aria-label={tr("Shop","Toko")} onclick={() => openShop(room === 'Lab' ? 'potions' : 'food')}><img src={imageUrl('shop/shop.png' in catalog.images ? 'shop/shop.png' : 'icons/shops/food.png')} alt="" /><span class="outlined">{tr("Shop","Toko")}</span></button>
@@ -480,10 +596,15 @@
       </div>
       {#if microphoneError}<p class="microphone-error" role="alert">{localMessage($language,microphoneError)}</p>{/if}
       {#if recording}<p class="recording-label outlined">{translate($language,"Mendengarkan…","Listening…")}</p>{/if}
-      <nav class="room-dots" aria-label={tr("Rooms","Ruangan")}>{#each ROOMS as name, i}<button class:active={roomIndex === i} aria-label={roomLabel(name)} aria-current={roomIndex === i ? 'page' : undefined} onclick={() => setRoom(i)}></button>{/each}</nav>
+      <nav class="room-dots" aria-label={tr("Rooms","Ruangan")}>
+        {#each (isOutdoor(room) ? OUTDOOR_ROOMS : INDOOR_ROOMS) as name}
+          {@const i = ROOMS.indexOf(name)}
+          <button class:active={roomIndex === i} aria-label={roomLabel(name)} aria-current={roomIndex === i ? 'page' : undefined} onclick={() => setRoom(i)}></button>
+        {/each}
+      </nav>
       <span class="save-indicator" aria-live="polite">{localMessage($language,saveStatus)}</span>
     </section>
-    {#if game}<MiniGame {game} {save} onclose={() => { game = null; modal = 'games'; }} onfinish={finishGame} />{/if}
+    {#if game}<MiniGame {game} {save} oncoin={(amount)=>commit(s=>earn(s,amount))} onclose={() => { game = null; modal = 'games'; }} onfinish={finishGame} />{/if}
     {#if online}<OnlineGame initialTab={onlineTab} name={save.name} onclose={()=>{online=false;modal='games';}} onfinish={finishOnline}/>{/if}
   </main>
 {/if}
@@ -511,7 +632,7 @@
       {:else if modal==='home'}
         <HomeDecor {save} {room} onchange={commit}/>
       {:else if modal==='experiments'}
-        <Experiments {save} onchange={commit} onshop={()=>openShop('potions')} onuse={()=>{audio.play('potion');closeMenu();}}/>
+        <Experiments {save} onchange={commit} onshop={()=>openShop('potions')} onuse={(outcome)=>{audio.play(outcome==='explosion'?'explosion':'potion');closeMenu();if(outcome==='explosion')notify(tr('The mixture exploded! Wash Pou.','Campurannya meledak! Mandikan Pou.'));}}/>
       {:else if modal==='companion'}
         <Companion {save} onchange={commit}/>
       {:else if modal === 'fridge'}

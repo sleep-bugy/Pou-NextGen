@@ -60,7 +60,7 @@ const definitions={
   'lamp-on':path('M58 73v26H39v15h50V99H70V73','metal')+path('m36 20-21 54h98L92 20Z','gold')+gleam('M43 29 29 66')+line('M9 21 4 15m115 6 5-6M64 9V3'),
   'lamp-off':path('M58 73v26H39v15h50V99H70V73','metal')+path('m36 20-21 54h98L92 20Z','purple')+gleam('M43 29 29 66'),
   soap:`<g transform="rotate(-16 64 70)">`+rect(17,43,94,59,22,'teal')+rect(27,52,74,38,16,'cream')+gleam('M38 60h35')+'</g>'+circle(88,27,12,'blue')+circle(109,48,8,'cream')+circle(72,10,5,'teal'),
-  shower:path('M104 119V72c0-17-7-28-23-28H60V29h21c27 0 36 18 36 43v47Z','metal')+path('M24 43c0-31 48-31 48 0Z','blue')+path('M19 43h58v9H19Z','metal')+path('m29 63-6 13m23-13-3 15m23-14 1 14m-40 11-6 13m25-12-3 15m24-14 1 14','none','stroke="#68b7cc" stroke-width="5"')+gleam('M36 27q8-6 16-4'),
+  shower:path('M104 119V72c0-17-7-28-23-28H60V29h21c27 0 36 18 36 43v47Z','metal')+path('M24 43c0-31 48-31 48 0Z','blue')+path('M19 43h58v9H19Z','metal')+gleam('M36 27q8-6 16-4'),
   flower:flower(),ball:soccer(),basketball:basketball(),
   food:food(),heart,happy:face('green'),
   palette:path('M64 16c-60 0-64 96-3 96 24 0 13-19 26-24 44-1 38-72-23-72Z','cream')+circle(40,40,9,'pink')+circle(68,32,9,'gold')+circle(91,51,9,'teal')+circle(91,76,9,'purple')+circle(39,79,12,'none')+gleam('M24 60q0-10 5-16'),

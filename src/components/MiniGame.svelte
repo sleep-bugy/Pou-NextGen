@@ -8,7 +8,7 @@
   import { lookFromSave } from '../lib/draw-pou';
   import { audio } from '../lib/audio';
   import FullscreenButton from './FullscreenButton.svelte';
-  let { game, save, onclose, onfinish }: { game: GameInfo; save: Save; onclose: () => void; onfinish: (id: string, score: number, bonusCoins?: number) => number } = $props();
+  let { game, save, onclose, onfinish, oncoin }: { game: GameInfo; save: Save; onclose: () => void; onfinish: (id: string, score: number, bonusCoins?: number) => number; oncoin: (amount: number) => void } = $props();
   let canvas: HTMLCanvasElement;
   let started = $state(false), paused = $state(false), result = $state(false);
   let score = $state(0), coins = $state(0), lives = $state(3), time = $state(60), reward = $state(0), message = $state('');
@@ -17,8 +17,8 @@
   function play() {
     engine?.destroy(); started = true; result = false; paused = false; coins = 0;
     engine = new MiniEngine(canvas, game.id, lookFromSave(save), (s, l, t, c) => { score = s; lives = l; time = t; coins = c; }, (s, m) => {
-      score = s; message = m; reward = onfinish(game.id, s, engine?.collectedCoins ?? 0); result = true; audio.stop();
-    }, text => localMessage($language,text));
+      score = s; message = m; reward = onfinish(game.id, s, engine?.collectedCoins ?? 0); result = true; audio.setMusic('');
+    }, text => localMessage($language,text), oncoin);
     audio.setMusic(game.music);
   }
   function pause(value: boolean) { paused = value; if (engine) engine.paused = value; value ? audio.pause() : audio.resume(); }
@@ -37,7 +37,7 @@
     <FullscreenButton compact />
     <button class="image-button" aria-label={paused ? translate($language,'Lanjutkan permainan','Resume game') : translate($language,'Jeda permainan','Pause game')} onclick={() => pause(!paused)} disabled={!started || result}><img src={imageUrl(paused?'icons/play.svg':'icons/pause.png')} alt="" /></button>
   </header>
-  <div class="game-score" style:grid-template-columns={`repeat(${2+Number(hud.lives)+Number(hud.timed)+Number(game.mode==='jump')},minmax(0,1fr))`}><span>{translate($language,"Skor:","Score:")} {score}</span><span>{translate($language,"Terbaik:","Best:")} {save.scores[game.id] ?? 0}</span>{#if game.mode==='jump'}<span aria-label={translate($language,`Koin terkumpul: ${coins}`,`Coins collected: ${coins}`)}>🪙 {coins}</span>{/if}{#if hud.lives}<span>♥ {lives}</span>{/if}{#if hud.timed}<span>{time}s</span>{/if}</div>
+  <div class="game-score" style:grid-template-columns={`repeat(${2+Number(hud.lives)+Number(hud.timed)+Number(['jump','catch','fall','fly','memory'].includes(game.mode))},minmax(0,1fr))`}><span>{translate($language,"Skor:","Score:")} {score}</span><span>{translate($language,"Terbaik:","Best:")} {save.scores[game.id] ?? 0}</span>{#if ['jump','catch','fall','fly','memory'].includes(game.mode)}<span aria-label={translate($language,`Koin terkumpul: ${coins}`,`Coins collected: ${coins}`)}>🪙 {coins}</span>{/if}{#if hud.lives}<span>{game.mode==='catch'?`${8-lives}/8`: game.mode==='fall'?`${5-lives}/5`: `♥ ${lives}`}</span>{/if}{#if hud.timed}<span>{time}s</span>{/if}</div>
   <canvas class="game-canvas" bind:this={canvas} aria-label={gameInstruction($language,game.id,game.instructions)}></canvas>
   {#if !started}
     <div class="game-overlay">

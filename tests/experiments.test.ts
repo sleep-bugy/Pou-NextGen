@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { newSave,parseSave,advance } from '../src/lib/model.ts';
+import { newSave,parseSave,advance,NEEDS_PER_HOUR } from '../src/lib/model.ts';
 import { poisonPou,antidotePou,endPouLife,revivePou,meetPartner,partnerAction } from '../src/lib/experiments.ts';
 
 test('old saves gain the new feature fields without losing progress',()=>{
@@ -9,8 +9,8 @@ test('old saves gain the new feature fields without losing progress',()=>{
 });
 test('fictional poison advances once with time and antidote stops further damage',()=>{
   let save=newSave(1000);poisonPou(save);assert.equal(save.life.state,'poisoned');
-  save=advance(save,11000);assert.equal(save.stats.health,77);antidotePou(save);const health=save.stats.health;
-  save=advance(save,21000);assert.equal(save.life.state,'alive');assert.equal(save.stats.health,health);
+  save=advance(save,11000);assert.ok(Math.abs(save.stats.health-(77-NEEDS_PER_HOUR.dirtyHealth/360))<1e-8);antidotePou(save);const health=save.stats.health;
+  save=advance(save,21000);assert.equal(save.life.state,'alive');assert.ok(Math.abs(save.stats.health-(health-NEEDS_PER_HOUR.dirtyHealth/360))<1e-8);
 });
 test('poison can end the character life and revival keeps coins, XP, wardrobe and partner',()=>{
   let save=newSave(1000);save.coins=543;save.xp=100;meetPartner(save,'Mimi','#f3a4b5');save.owned.push('hats/100/black-pink.png');poisonPou(save);save=advance(save,121000);

@@ -7,7 +7,7 @@
 @media(max-width:420px){.dialog-body{padding:12px}.shop-grid,.games-grid{gap:7px}.shop-item{min-height:130px}.shop-item span{font-size:15px}.shop-item img{height:65px}.game-list-item span{font-size:16px}.game-list-item img{height:65px;width:65px}.game-list-item{min-height:125px}.room-title{left:13%;right:13%}.coins span{-webkit-text-stroke:1px #29291f}.outlined{-webkit-text-stroke:1.3px #29291f}.toast{font-size:16px}}
 @media(orientation:landscape) and (max-height:600px){.playfield{width:100%}.game-top{min-height:36px}.game-top button{height:28px;width:28px}.game-score{font-size:14px;padding:5px}.stat-number{font-size:10px}.room-title h1{font-size:23px}.room-title{top:17%}}
 
-.bath-tools{z-index:20}.phone,.closet,.side-object{z-index:10}
+.bath-tools{z-index:20}.bottom-tools,.room-dots{z-index:12}.phone,.closet,.side-object,.garden-flower,.clean-meter,.bath-hint{z-index:10}.item-tray{z-index:12}.ball{z-index:15}.pillow,.grass{z-index:1}.dragged-hidden{opacity:0;pointer-events:none}
 
 .bathroom .bath-tools{left:20%;right:20%}.bathroom .bath-tools button{width:25%}.bathroom .clean-meter{left:38%;right:38%;top:73%;font-size:clamp(12px,2.8cqw,20px);pointer-events:none}.bathroom .clean-meter progress{height:12px;margin-top:5px;accent-color:#5fc35b}.bath-hint{position:absolute;bottom:14.8%;left:8%;right:8%;font-size:clamp(10px,2.5cqw,18px);text-align:center;pointer-events:none;color:#365e65}.bathroom .tool-active{filter:none;border-radius:16px;background:rgba(255,255,255,.3);box-shadow:0 0 0 2px rgba(39,104,127,.6)}
 

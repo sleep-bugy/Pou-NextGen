@@ -5,7 +5,7 @@ import { tracePouBody } from './pou-geometry';
 export interface PouLook {
   body?: string; eyes?: string; hat?: string; glasses?: string; outfit?: string;
   sleeping?: boolean; sad?: boolean; dirty?: number; mouth?: number; lookX?: number; lookY?: number; blink?: boolean;
-  dead?:boolean; poisoned?:boolean;tired?:boolean;tiny?:boolean;ghost?:boolean;rainbow?:boolean;affectionate?:boolean;
+  dead?:boolean; poisoned?:boolean;tired?:boolean;tiny?:boolean;ghost?:boolean;rainbow?:boolean;affectionate?:boolean;soot?:boolean;
 }
 
 const outline = (c: CanvasRenderingContext2D, fill: string, width = 3) => {
@@ -16,7 +16,7 @@ const outline = (c: CanvasRenderingContext2D, fill: string, width = 3) => {
 /** Vector character, so retina scaling and eye tracking do not blur the sprites. */
 export function drawPou(c: CanvasRenderingContext2D, x: number, y: number, size: number, look: PouLook = {}) {
   c.save(); c.translate(x, y);const actual=size*(look.tiny ? .65 :1);c.scale(actual / 300, actual / 300);if(look.ghost)c.globalAlpha=.4;
-  const bodyColor=look.dead?'#c4c2bf':look.poisoned?'#b0c36b':look.rainbow?`hsl(${Math.floor(Date.now()/30)%360} 65% 72%)`:look.body??'#d2a057';
+  const bodyColor=look.dead?'#c4c2bf':look.soot?'#625951':look.poisoned?'#b0c36b':look.rainbow?`hsl(${Math.floor(Date.now()/30)%360} 65% 72%)`:look.body??'#d2a057';
   tracePouBody(c); outline(c, bodyColor, 3.3);
   if (look.outfit) {
     c.save(); c.clip();
@@ -73,5 +73,5 @@ export function drawPou(c: CanvasRenderingContext2D, x: number, y: number, size:
 
 export function lookFromSave(save: Save): PouLook {
   const effect=save.life.state!=='dead'&&save.world.lab.effect.until>Date.now()?save.world.lab.effect.kind:'none';
-  return { ...save.appearance,tiny:effect==='tiny',ghost:effect==='ghost',rainbow:effect==='rainbow',affectionate:save.world.personality.bond>=40, dead:save.life.state==='dead',poisoned:save.life.state==='poisoned',tired:isExhausted(save), sleeping: save.sleeping, sad: Math.min(save.stats.fun, save.stats.health, save.stats.fullness) < 25, dirty: 1 - save.stats.clean / 100 };
+  return { ...save.appearance,tiny:effect==='tiny',ghost:effect==='ghost',rainbow:effect==='rainbow',soot:save.world.lab.soot,affectionate:save.world.personality.bond>=40, dead:save.life.state==='dead',poisoned:save.life.state==='poisoned',tired:isExhausted(save), sleeping: save.sleeping, sad: Math.min(save.stats.fun, save.stats.health, save.stats.fullness) < 25, dirty: 1 - save.stats.clean / 100 };
 }

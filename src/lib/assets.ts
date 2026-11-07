@@ -21,14 +21,15 @@ export function getImage(key: string): HTMLImageElement | undefined {
 export const prettyName = (key: string) => key.replace(/\.png$/, '').split('/').at(-1)!.replaceAll('_', ' ').replace(/\b\w/g, s => s.toUpperCase());
 
 export const POTIONS = [
-  { id: '1', name: 'Health Potion', price: 20, stat: 'health', amount: 30 },
-  { id: '2', name: 'Energizer', price: 30, stat: 'energy', amount: 30 },
-  { id: '3', name: 'Fat Burner', price: 15, stat: 'fullness', amount: -40 },
-  { id: '4', name: 'Max Potion', price: 99, stat: 'all', amount: 100 },
-  { id: '5', name: 'Hunger Potion', price: 20, stat: 'fullness', amount: -70 },
-  { id: '6', name: 'Baby Potion', price: 99, stat: 'baby', amount: 0 },
-  { id: '7', name: 'Adult Potion', price: 99, stat: 'adult', amount: 0 },
-  { id: '8', name: 'Fun Potion', price: 20, stat: 'fun', amount: 40 },
+  { id: '1', name: 'Health Potion', price: 10, stat: 'health', amount: 50 },
+  { id: '2', name: 'Small Health Potion', price: 6, stat: 'health', amount: 25 },
+  { id: '3', name: 'Fat Burner', price: 20, stat: 'fat', amount: 0 },
+  { id: '4', name: 'Energizer', price: 50, stat: 'energy', amount: 100 },
+  { id: '5', name: 'Hunger Potion', price: 199, stat: 'fullness', amount: -100 },
+  { id: '6', name: 'Baby Potion', price: 1999, stat: 'baby', amount: 0 },
+  { id: '7', name: 'Adult Potion', price: 3999, stat: 'adult', amount: 0 },
+  { id: '8', name: 'Max Potion', price: 99, stat: 'all', amount: 100 },
+  { id: 'fun', name: 'Fun Potion', price: 20, stat: 'fun', amount: 40 },
   { id: 'poison', name: 'Racun Alien', price: 15, stat: 'poison', amount: 0 },
   { id: 'spin', name: 'Racun Pusaran', price: 40, stat: 'spin', amount: 0 },
   { id: 'drowsy', name: 'Racun Kantuk', price: 25, stat: 'drowsy', amount: 0 },
@@ -36,7 +37,7 @@ export const POTIONS = [
   { id: 'antidote-max', name: 'Penawar Maksimal', price: 60, stat: 'antidote', amount: 100 },
   { id: 'infinite', name: 'Energi Unlimited', price: 9999, stat: 'infinite', amount: 100 },
 ] as const;
-export const potionImage=(id:string)=>/^\d$/.test(id)?`potions/${id}.png`:`potions/custom/${id}.svg`;
+export const potionImage=(id:string)=>/^\d$/.test(id)?`potions/${id}.png`:id==='fun'?'potions/8.png':`potions/custom/${id}.svg`;
 export function potionDescription(id:string){return ({poison:'Kesehatan berkurang selama 120 detik. Bisa mematikan.',spin:'Tampilan berputar selama 5 detik.',drowsy:'Energi turun menjadi 5% dan Pou tertidur.',antidote:'Hentikan semua racun dan pulihkan 25 kesehatan.','antidote-max':'Hentikan semua racun dan pulihkan kesehatan penuh.',infinite:'Energi selalu 100%, permanen setelah diminum.'} as Record<string,string>)[id]??'';}
 
 export const foodPrice = (key: string) => /water$|apple$|carrot$/.test(key) ? 5 : /burger|pizza|lobster|cake|sushi|soup/.test(key) ? 15 : 10;
@@ -45,7 +46,7 @@ export const foodNutrition = (key: string) => /water$|juice|soda|tea/.test(key) 
 export const GAMES = [
   { id: 'food-drop', name: 'Food Drop', music: 'music_food', instructions: 'Move Pou to catch food. Avoid falling objects!', mode: 'catch' },
   { id: 'sky-jump', name: 'Sky Jump', music: 'music_jump', instructions: 'Move left and right. Jump as high as you can!', mode: 'jump' },
-  { id: 'free-fall', name: 'Free Fall', music: 'music_fall', instructions: 'Move left and right. Fall through the clouds!', mode: 'fall' },
+  { id: 'free-fall', name: 'Free Fall', music: 'music_fall', instructions: 'Move left and right. Avoid clouds and collect coins!', mode: 'fall' },
   { id: 'jet-pou', name: 'Jet Pou', music: 'music_country', instructions: 'Tap to fly. Pass between the tree trunks!', mode: 'fly' },
   { id: 'cliff-jump', name: 'Cliff Jump', music: 'music_country', instructions: 'Tap to jump. Jump over the gaps!', mode: 'run' },
   { id: 'memory', name: 'Memory', music: 'music_soft', instructions: 'Turn over the cards and find matching pairs!', mode: 'memory' },
@@ -65,6 +66,6 @@ export type GameInfo = typeof GAMES[number];
 export function gameHud(mode: GameInfo['mode']) {
   return {
     timed: ['color','sad','match','swap','goal','hoops'].includes(mode),
-    lives: ['catch','goal','hoops'].includes(mode),
+    lives: ['catch','fall','goal','hoops'].includes(mode),
   };
 }

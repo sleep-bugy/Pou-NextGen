@@ -1,5 +1,5 @@
 import {clamp,spend,earn,isExhausted,type Save} from './model.ts';
-import {FURNITURE,MIXES,ROOM_NAMES,type WorldReward} from './world-state.ts';
+import {FURNITURE,findMix,ROOM_NAMES,type WorldReward} from './world-state.ts';
 export function furnish(save:Save,item:string,room:string){
   const f=FURNITURE.find(f=>f.id===item);if(!f||!ROOM_NAMES.includes(room))return 'Furnitur atau ruangan tidak dikenal.';
   if(!save.world.home.owned.includes(item)){if(!spend(save,f.price))return 'Koin belum cukup.';save.world.home.owned.push(item);}
@@ -16,13 +16,19 @@ export function favoriteFood(save:Save){const top=Object.entries(save.world.pers
 export function personality(save:Save){const p=save.world.personality;return p.games>p.pets&&p.games>p.baths?'Petualang':p.pets>=5&&p.pets>p.games?'Manja':Object.values(p.food).reduce((a,b)=>a+b,0)>p.games+5?'Pencinta makanan':p.baths>=3?'Suka bersih':'Penasaran';}
 export function mixPotions(save:Save,a:string,b:string,now=Date.now()){
   if(save.life.state==='dead'||save.sleeping||isExhausted(save))return 'Pou perlu bangun dan sehat untuk bereksperimen.';
+  const recipe=findMix(a,b);
+  if(!recipe)return 'Ramuan tidak dikenal.';
   const needed:Record<string,number>={};for(const id of [a,b])needed[id]=(needed[id]??0)+1;
   if(Object.entries(needed).some(([id,n])=>(save.potions[id]??0)<n))return 'Stok bahan belum cukup.';
-  const recipe=MIXES.find(m=>[...m.ingredients].sort().join('|')===[a,b].sort().join('|'));
-  if(!recipe)return 'Kombinasi belum cocok. Coba petunjuk resep; bahan tidak terpakai.';
   for(const [id,n] of Object.entries(needed))save.potions[id]-=n;
+  // Preserve recipes discovered in earlier versions while allowing new experiments to fail.
+  if(!recipe.special&&!save.world.lab.discovered.includes(recipe.id)){
+    save.stats.clean=0;save.world.lab.soot=true;
+    save.world.lab.effect={kind:'blast',until:now+2200};
+    return 'explosion';
+  }
   if(!save.world.lab.discovered.includes(recipe.id))save.world.lab.discovered.push(recipe.id);
-  save.world.lab.effect={kind:recipe.id,until:now+recipe.seconds*1000};save.xp+=5;return '';
+  save.world.lab.effect={kind:recipe.effect,until:now+recipe.seconds*1000};earn(save,0,5);return '';
 }
 export function claimReward(save:Save,reward:WorldReward){
   if(save.world.claimed.includes(reward.id))return false;

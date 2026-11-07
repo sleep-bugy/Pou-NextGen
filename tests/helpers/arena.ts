@@ -11,6 +11,7 @@ const code = ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.
 export function arena(game = 'food-drop', width = 1366, height = 530, rng: () => number = () => .97) {
   const rectangles: number[][] = [], sprites: { path: string; x: number; w: number }[] = [], pous: number[] = [];
   const paths: {method:string;args:number[]}[] = [];
+  const coinAwards: number[] = [];
   let matrix = [1,0,0,1,0,0], observer: () => void = () => {};
   const rect = { left:0, top:0, width, height };
   const events = new Map<string,(event: unknown)=>void>();
@@ -27,6 +28,6 @@ export function arena(game = 'food-drop', width = 1366, height = 530, rng: () =>
     require:(name:string)=> name.endsWith('/assets')?{GAMES,getImage:(path:string)=>({path,width:100,height:100})}:name.endsWith('/draw-pou')?{drawPou:(_c:unknown,x:number)=>pous.push(x*matrix[0]+matrix[4])}:name.endsWith('/audio')?{audio:{play(){}}}:name.endsWith('/viewport')?viewport:name.endsWith('/mini-physics')?physics:undefined,
   });
   vm.runInContext(code,scope);
-  const engine = new exports.MiniEngine(canvas,game,{},()=>{},()=>{});
-  return {engine,canvas,events,rect,sprites,pous,rectangles,paths,helpers:exports,resize:()=>observer()};
+  const engine = new exports.MiniEngine(canvas,game,{},()=>{},()=>{},undefined,(amount:number)=>coinAwards.push(amount));
+  return {engine,canvas,events,rect,sprites,pous,rectangles,paths,coinAwards,helpers:exports,resize:()=>observer()};
 }

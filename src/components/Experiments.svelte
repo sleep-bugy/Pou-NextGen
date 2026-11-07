@@ -4,9 +4,9 @@
   import { consumePotion,endPouLife,revivePou } from '../lib/experiments';
   import { imageUrl,potionImage,potionDescription,POTIONS } from '../lib/assets';
   import MixingLab from './MixingLab.svelte';
-  let {save,onchange,onshop,onuse}:{save:Save;onchange:(fn:(s:Save)=>void)=>void;onshop:()=>void;onuse:()=>void}=$props();
+  let {save,onchange,onshop,onuse}:{save:Save;onchange:(fn:(s:Save)=>void)=>void;onshop:()=>void;onuse:(outcome?:'explosion')=>void}=$props();
   let confirm=$state<string|null>(null),message=$state('');
-  const items=POTIONS.filter(p=>!/^\d$/.test(p.id));
+  const items=POTIONS;
   function apply(id:string){
     let error='';
     onchange(s=>{if(id==='death')endPouLife(s);else if(id==='revive')revivePou(s);else error=consumePotion(s,id);});
@@ -27,7 +27,7 @@
 {:else}
   <div class="experiment-cards">
     {#each items as p}<button class="shop-item" onclick={()=>choose(p.id)} disabled={p.id==='infinite'&&save.boosts.unlimitedEnergy}>
-      <img src={imageUrl(potionImage(p.id))} alt=""/><span>{itemName($language,p.name)}</span><small>×{save.potions[p.id]??0}</small><small>{localMessage($language,potionDescription(p.id))}</small>
+      <img src={imageUrl(potionImage(p.id))} alt=""/><span>{itemName($language,p.name)}</span><small>×{save.potions[p.id]??0}</small>{#if potionDescription(p.id)}<small>{localMessage($language,potionDescription(p.id))}</small>{/if}
     </button>{/each}
   </div>
   <button class="cream-button" onclick={onshop}>{translate($language,"Beli ramuan","Buy potions")}</button>

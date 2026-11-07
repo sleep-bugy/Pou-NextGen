@@ -107,9 +107,9 @@ test('Sky Jump draws collectible coins and collects each coin only once while ju
   a.engine.draw();
   assert.ok(a.sprites.some((sprite:any)=>sprite.path==='coin/coin_sm.png'));
   a.engine.player.x=platform.x+platform.w/2;
-  a.engine.player.y=platform.y-44;
-  a.engine.player.v=-100;
-  a.engine.update(1/120);
+  a.engine.player.y=platform.y-30;
+  a.engine.player.v=100;
+  a.engine.update(1/60);
   assert.equal(a.engine.collectedCoins,1);
   assert.equal(platform.coin,false);
   a.engine.update(1/120);
@@ -124,4 +124,13 @@ test('Sky Jump limits horizontal gaps even on very wide screens',()=>{
     assert.ok(Math.abs(current.x+current.w/2-previous.x-previous.w/2)<=200.001);
   }
   a.engine.destroy();
+});
+
+test('Jet Pou collects normal and bonus coins only once',()=>{
+  const a=arena('jet-pou');
+  a.engine.jetCoins=[{x:a.engine.player.x+2,y:a.engine.player.y,bonus:false}];
+  a.engine.update(.01);assert.equal(a.engine.collectedCoins,1);
+  a.engine.jetCoins=[{x:a.engine.player.x+2,y:a.engine.player.y,bonus:true}];
+  a.engine.update(.01);assert.equal(a.engine.collectedCoins,6);
+  a.engine.update(.01);assert.equal(a.engine.collectedCoins,6);assert.deepEqual(a.coinAwards,[1,5]);a.engine.destroy();
 });

@@ -4,8 +4,8 @@
   import type { Point } from '../lib/pou-geometry';
   import { getImage } from '../lib/assets';
 
-  let { water, bubbles, reducedMotion, active, onrinse }: {
-    water: Point | null; bubbles: FoamBubble[]; reducedMotion: boolean; active: boolean; onrinse: (seconds: number) => void;
+  let { water, bubbles, reducedMotion, active, onrinse, bodySize = 1 }: {
+    water: Point | null; bubbles: FoamBubble[]; reducedMotion: boolean; active: boolean; onrinse: (seconds: number) => void; bodySize?: number;
   } = $props();
   let canvas: HTMLCanvasElement;
   let droplets = $state(0);
@@ -25,8 +25,8 @@
       if (!document.hidden && width && height) {
         const source = active ? water : null;
         const reduced = reducedMotion;
-        bath.step(dt, source, width, height, reduced);
-        if (source && showerHitsPou(source, width, height)) {
+        bath.step(dt, source, width, height, reduced, bodySize);
+        if (source && showerHitsPou(source, width, height, bodySize)) {
           washing += dt;
           if (washing >= 0.25) { onrinse(washing); washing = 0; }
         } else washing = 0;

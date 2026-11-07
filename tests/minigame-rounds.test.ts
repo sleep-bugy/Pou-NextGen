@@ -12,7 +12,7 @@ test('Memory can complete a whole matched board and pays once on completion',()=
     const indices=a.engine.board.flatMap((v:number,i:number)=>v===value?[i]:[]);
     tap(a,indices[0]);tap(a,indices[1]);a.engine.update(1);
   }
-  assert.equal(a.engine.finished,true);assert.equal(a.engine.score,80);a.engine.destroy();
+  assert.equal(a.engine.finished,true);assert.equal(a.engine.score,160);assert.equal(a.engine.collectedCoins,8);assert.equal(a.coinAwards.reduce((a,b)=>a+b,0),8);a.engine.destroy();
 });
 test('Color Tap and Sad Tap score through multiple playable rounds',()=>{
   const color=arena('color-tap');
@@ -47,10 +47,14 @@ test('Find Pou and Pou Sounds accept the displayed answer and advance the round'
   const sounds=arena('pou-sounds');for(let i=0;i<300;i++)sounds.engine.update(.01);
   assert.equal(sounds.engine.showing,false);tap(sounds,sounds.engine.sequence[0],responsiveGrid(sounds.engine.W,680,4,160));assert.equal(sounds.engine.score,1);assert.equal(sounds.engine.sequence.length,2);sounds.engine.destroy();
 });
-test('Food Drop collects food once and a harmful object removes exactly one life',()=>{
-  const a=arena('food-drop');a.engine.items=[{x:a.engine.player.x,y:529,v:140,type:0}];a.engine.update(.02);
-  assert.equal(a.engine.score,1);a.engine.update(.02);assert.equal(a.engine.score,1);
-  a.engine.items=[{x:a.engine.player.x,y:529,v:140,type:8}];a.engine.update(.02);assert.equal(a.engine.lives,2);a.engine.destroy();
+test('Food Drop awards one coin per two catches, allows eight misses, and ends on a caught hazard',()=>{
+  const a=arena('food-drop');
+  for(let i=0;i<2;i++) { a.engine.items=[{x:a.engine.player.x,y:559,v:140,type:0}];a.engine.update(.02); }
+  assert.equal(a.engine.score,2); assert.equal(a.engine.collectedCoins,1); assert.deepEqual(a.coinAwards,[1]);
+  for(let i=0;i<7;i++) { a.engine.items=[{x:a.engine.player.x+100,y:559,v:140,type:0}];a.engine.update(.02); }
+  assert.equal(a.engine.lives,1); assert.equal(a.engine.finished,false);
+  a.engine.items=[{x:a.engine.player.x,y:559,v:140,type:8}];a.engine.update(.02);
+  assert.equal(a.engine.finished,true);a.engine.destroy();
 });
 test('Goal accepts a real upward gesture and can score past the moving keeper',()=>{
   for(const [width,height] of [[390,720],[1366,530],[820,1000]]){
@@ -61,14 +65,18 @@ test('Goal accepts a real upward gesture and can score past the moving keeper',(
     assert.equal(a.engine.score,1,`${width}: a shot into the goal away from the keeper must score`);a.engine.destroy();
   }
 });
-test('Free Fall can survive continuous steering through the gaps',()=>{
-  const a=arena('free-fall');
-  for(let i=0;i<2000&&!a.engine.finished;i++){
-    const gap=[...a.engine.items].filter(p=>p.y>=a.engine.player.y+20).sort((p,q)=>p.y-q.y)[0];
-    if(gap)a.engine.moveTarget=gap.x+gap.w/2;
-    a.engine.update(.01);
+test('Free Fall scores for passing clouds, collects coins and ends after five cloud hits',()=>{
+  const a=arena('free-fall',390,720,()=>.2);
+  a.engine.player.x=200;
+  a.engine.items=[{x:0,w:80,y:381,coin:true,coinX:200}];
+  a.engine.update(.02);
+  assert.equal(a.engine.score,1);
+  a.engine.update(.3);
+  assert.equal(a.engine.collectedCoins,1);
+  for(let i=0;i<5;i++){
+    a.engine.items=[{x:160,w:80,y:381,coin:false}];a.engine.update(.02);
   }
-  assert.equal(a.engine.finished,false);assert.ok(a.engine.score>=59);a.engine.destroy();
+  assert.equal(a.engine.finished,true);assert.equal(a.engine.lives,0);a.engine.destroy();
 });
 
 test('Jet Pou can fly through successive generated pipe openings',()=>{

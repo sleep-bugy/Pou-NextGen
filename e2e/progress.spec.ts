@@ -65,12 +65,12 @@ test('a completed minigame grants its reward once and retains the high score', a
   };
   for (let i = 0; i < 8; i++) { await clickCard(i); await clickCard(i + 8); }
   await expect(page.getByRole('heading', { name: 'Great memory!' })).toBeVisible();
-  await expect(page.locator('.large-score')).toHaveText('Score: 80');
+  await expect(page.locator('.large-score')).toHaveText('Score: 160');
   await page.getByRole('button', { name: 'Games', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Memory Best: 80' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Memory Best: 160' })).toBeVisible();
   await page.getByRole('button', { name: 'Close menu' }).click();
   await page.reload();
-  await expect(page.getByRole('button', { name: /Coins: 226/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Coins: 208/ })).toBeVisible();
 });
 
 test('iPad and phone layouts fit without horizontal overflow', async ({ page }) => {
@@ -104,7 +104,9 @@ test('shower water is visible and rinses continuously until stopped', async ({ p
   await openGame(page);
   await page.getByRole('button', { name:'Bathroom', exact:true }).click();
   await page.getByRole('button', { name:'Use soap', exact:true }).click();
-  await page.getByRole('button', { name:'Wash Pou', exact:true }).click();
+  const washArea = (await page.getByRole('button', { name:'Wash Pou', exact:true }).boundingBox())!;
+  // A new Pou starts as a baby standing on the floor, below the area's centre.
+  await page.mouse.click(washArea.x + washArea.width * .5, washArea.y + washArea.height * .72);
   const effects = page.getByTestId('bath-effects');
   await expect.poll(async () => Number(await effects.getAttribute('data-foam-count'))).toBeGreaterThan(0);
   await page.getByRole('button', { name:'Use shower', exact:true }).click();

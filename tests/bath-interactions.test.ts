@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
-import { newSave, clamp, earn,isExhausted,enforceRest } from '../src/lib/model.ts';
+import { newSave, clamp, earn,isExhausted,enforceRest,updateBathroom } from '../src/lib/model.ts';
 import { rinseFoam } from '../src/lib/bath.ts';
 import { gazeAt, roomPouGeometry } from '../src/lib/pou-geometry.ts';
 import { GameAudio } from '../src/lib/audio.ts';
@@ -16,10 +16,10 @@ function handlers(environment: Record<string, unknown>) {
   const component = readFileSync(new URL('../src/App.svelte', import.meta.url), 'utf8');
   const script = component.match(/<script lang="ts">([\s\S]*?)<\/script>/)![1];
   const ast = ts.createSourceFile('App.ts', script, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-  const wanted = new Set(['requireRest','pet','feed','toggleSleep', 'usePotion', 'dragStart', 'dragMove', 'dragEnd', 'cancelDrag', 'lostDrag', 'positionShower', 'rinsePou', 'trackGaze']);
+  const wanted = new Set(['requireRest','pet','feed','toggleSleep', 'usePotion', 'dragStart', 'dragMove', 'dragEnd', 'cancelDrag', 'lostDrag', 'positionShower', 'rinsePou', 'trackGaze', 'finishGame', 'stopSpeech', 'microphone']);
   const declarations = ast.statements.filter(node => ts.isFunctionDeclaration(node) && node.name && wanted.has(node.name.text)).map(node => node.getText(ast)).join('\n');
   const js = ts.transpileModule(declarations, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText;
-  const scope = vm.createContext({isExhausted,care,favoriteFood,...environment});
+  const scope = vm.createContext({isExhausted,care,favoriteFood,updateBathroom,...environment});
   vm.runInContext(js, scope);
   return scope;
 }
@@ -70,7 +70,7 @@ test('a shower already running cannot rinse an exhausted Pou',()=>{
 
 test('dragging a purchased poison to the mouth drinks it immediately without opening the shelf',()=>{
   for(const id of ['poison','spin','drowsy','antidote','antidote-max','infinite','1']){
-    const save=newSave();save.potions[id]=1;const menus:string[]=[],sounds:string[]=[];
+    const save=newSave();save.potions[id]=1;if(id==='1')save.stats.health=50;const menus:string[]=[],sounds:string[]=[];
     const scope=handlers({save,potion:POTIONS.find(p=>p.id===id),consumePotion,drag:null,eating:0,
       open:(name:string)=>menus.push(name),openShop:(name:string)=>menus.push(name),notify(){},
       audio:{play:(name:string)=>sounds.push(name)},commit:(fn:(s:typeof save)=>void)=>fn(save),
@@ -88,7 +88,7 @@ test('dragging a purchased poison to the mouth drinks it immediately without ope
 
 test('the room pointer handler follows clicks beside Pou without petting or feeding', () => {
   const save = newSave();
-  const scope = handlers({ save, gaze:{x:0,y:0}, gazeAt, roomPouGeometry, playingField:{getBoundingClientRect:()=>({left:0,top:0,width:1366,height:615})} });
+  const scope = handlers({ save, bodyScale:save.bodySize, gaze:{x:0,y:0}, gazeAt, roomPouGeometry, playingField:{getBoundingClientRect:()=>({left:0,top:0,width:1366,height:615})} });
   vm.runInContext('trackGaze({clientX:20,clientY:300})',scope);
   assert.equal(vm.runInContext('gaze.x',scope),-1);
   vm.runInContext('trackGaze({clientX:1340,clientY:300})',scope);
@@ -116,7 +116,7 @@ test('a shower tap starts continuous rinsing; the next tap stops it', () => {
   vm.runInContext('lostDrag(event)', scope);
   assert.equal(vm.runInContext('water !== null', scope), true, 'normal release of pointer capture must not switch off the shower');
   vm.runInContext('rinsePou(0.25)', scope);
-  assert.equal(vm.runInContext('save.stats.clean', scope), 83);
+  assert.equal(vm.runInContext('save.stats.clean', scope), 80, 'water alone cannot wash Pou');
   vm.runInContext('dragStart(event,"shower");dragEnd(event)', scope);
   const before = vm.runInContext('save.stats.clean', scope);
   vm.runInContext('rinsePou(0.25)', scope);
@@ -134,10 +134,59 @@ test('canceling a shower gesture stops water and ignores a later pointer release
 
 test('one bath gives one completion reward even as passive cleanliness decay resumes', () => {
   const scope = bathHandlers();
-  vm.runInContext('save.stats.clean=94; dragStart(event,"shower");dragEnd(event);rinsePou(0.5)', scope);
+  vm.runInContext('save.stats.clean=94; washRewardEligible=true; bubbles=[{id:1,x:50,y:50}]; dragStart(event,"shower");dragEnd(event);rinsePou(0.5)', scope);
   for (let i = 0; i < 20; i++) vm.runInContext('save.stats.clean=99.999;rinsePou(0.25)', scope);
   assert.equal(vm.runInContext('save.counters.washed', scope), 1);
   assert.equal(vm.runInContext('save.coins', scope), 205);
+});
+
+test('soap must be fully rinsed before a bath completes', () => {
+  const scope = bathHandlers();
+  vm.runInContext('save.world.lab.soot=true; washRewardEligible=true; bubbles=[{id:1,x:50,y:50},{id:2,x:80,y:50}]; water={x:50,y:30}; rinsePou(0.25)', scope);
+  assert.equal(vm.runInContext('save.stats.clean', scope), 80);
+  assert.equal(vm.runInContext('save.coins', scope), 200);
+  vm.runInContext('water={x:80,y:30}; rinsePou(0.25)', scope);
+  assert.equal(vm.runInContext('save.stats.clean', scope), 100);
+  assert.equal(vm.runInContext('save.world.lab.soot', scope), false);
+  assert.equal(vm.runInContext('save.coins', scope), 205);
+});
+
+test('feeding advances the dirt timer without subtracting cleanliness directly', () => {
+  const save = newSave(); save.bathroom.dirtyRemainingMs = 3_600_000;
+  const scope = handlers({save,food:'apple',foodNutrition:()=>14,foodName:()=>'',tr:()=>'',eating:0,earn,Math:Object.assign(Object.create(Math),{random:()=>.5}),
+    notify(){},audio:{play(){}},commit:(fn:(s:typeof save)=>void)=>fn(save),clamp});
+  vm.runInContext('feed()',scope);
+  assert.equal(save.food.apple,2);
+  assert.equal(save.bathroom.dirtyRemainingMs,1_800_000);
+  assert.equal(save.stats.clean,80);
+});
+
+test('collected minigame coins grant one XP each without paying the coins twice', () => {
+  for (const game of ['food-drop','sky-jump','free-fall','jet-pou','memory']) {
+    const save = newSave(); earn(save, 4);
+    const scope = handlers({save,earn,clamp,commit:(fn:(s:typeof save)=>void)=>fn(save)});
+    assert.equal(vm.runInContext(`finishGame('${game}', 80, 4)`,scope), 4);
+    assert.equal(save.coins, 204);
+    assert.equal(save.xp, 4);
+  }
+});
+
+test('recorded voice respects mute and can be stopped when the app is hidden', async () => {
+  const save=newSave();let sources=0,stops=0;
+  class Recorder {
+    state='recording';mimeType='audio/webm';onstop?:()=>Promise<void>;ondataavailable?:()=>void;
+    start(){} stop(){this.state='inactive';}
+  }
+  class Context {
+    destination={};resume(){return Promise.resolve();}
+    decodeAudioData(){return Promise.resolve({duration:1});}
+    createBufferSource(){sources++;return {buffer:null,playbackRate:{value:1},connect(){},disconnect(){},start(){},stop(){stops++;}};}
+  }
+  const scope=handlers({save,foreground:true,recording:false,microphoneError:'',mediaStream:undefined,mediaRecorder:undefined,audioContext:undefined,speechSource:undefined,recordTimer:undefined,eating:0,
+    navigator:{mediaDevices:{getUserMedia:async()=>({getTracks:()=>[{stop(){}}]})}},window:{MediaRecorder:Recorder},MediaRecorder:Recorder,AudioContext:Context,Blob,setTimeout,clearTimeout});
+  await vm.runInContext('microphone()',scope);save.settings.sound=false;await vm.runInContext('mediaRecorder.onstop()',scope);assert.equal(sources,0);
+  save.settings.sound=true;await vm.runInContext('microphone()',scope);await vm.runInContext('mediaRecorder.onstop()',scope);assert.equal(sources,1);
+  vm.runInContext('stopSpeech()',scope);assert.equal(stops,1);assert.equal(vm.runInContext('speechSource',scope),undefined);
 });
 
 test('a hidden, sleeping or paused bath cannot advance cleanliness', () => {

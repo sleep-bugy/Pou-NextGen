@@ -7,10 +7,17 @@
 .spin-status{position:absolute;z-index:28;top:calc(24% + 44px);left:50%;transform:translateX(-50%);background:#ede0ff;border:2px solid #58356d;border-radius:10px;padding:6px 10px;font-size:clamp(14px,2.5cqh,19px);white-space:nowrap}
 .spin-status button{background:#fff5d8;border:1px solid #58356d;border-radius:5px;padding:4px 8px;margin-left:8px}
 .still-effects.poison-spin{animation:none;will-change:auto}
+.lab-blast{position:absolute;inset:0;z-index:35;overflow:hidden;pointer-events:none;display:grid;place-items:center;background:radial-gradient(circle,#fffbd2 0%,#ffde52 24%,#f37a20 55%,#612411 100%);animation:lab-blast-screen 2.2s ease-out forwards}
+.lab-blast-core{position:absolute;width:160vmax;height:160vmax;border-radius:50%;background:repeating-conic-gradient(from 10deg,rgba(255,252,189,.9) 0deg 11deg,rgba(255,135,22,.35) 12deg 24deg);animation:lab-blast-core 2.2s ease-out forwards}
+.lab-blast span{position:relative;color:#fff7b1;font-size:clamp(70px,18vw,210px);-webkit-text-stroke:3px #8d260c;text-shadow:5px 8px #b84417;transform:rotate(-9deg);animation:lab-blast-text 2.2s ease-out forwards}
+@keyframes lab-blast-screen{0%{opacity:0}5%{opacity:1}60%{opacity:.96}100%{opacity:0}}
+@keyframes lab-blast-core{0%{transform:scale(.03) rotate(0)}45%{transform:scale(1) rotate(28deg)}100%{transform:scale(1.35) rotate(45deg)}}
+@keyframes lab-blast-text{0%{transform:scale(.1) rotate(-15deg)}30%{transform:scale(1.1) rotate(-9deg)}100%{transform:scale(1) rotate(-9deg)}}
+.lab-blast.reduced,.lab-blast.reduced .lab-blast-core,.lab-blast.reduced span{animation:none}.lab-blast.reduced{opacity:.7}
 .shop-grid .shop-item small{white-space:normal;line-height:1.35}
 .stat-number{color:#24261d;text-shadow:0 1px 0 #fff8}
 .night .stat-number{color:#fff4d6;text-shadow:0 1px 1px #192736}
-@media(prefers-reduced-motion:reduce){.poison-spin{animation:none;will-change:auto}}
+@media(prefers-reduced-motion:reduce){.poison-spin{animation:none;will-change:auto}.lab-blast,.lab-blast .lab-blast-core,.lab-blast span{animation:none}.lab-blast{opacity:.7}}
 .playfield {
   container-type: size;
   --status-size: clamp(40px, min(13cqw, 10cqh), 76px);
@@ -251,3 +258,18 @@
   .side-object, .side-object.lamp { grid-template-rows: 44px auto; gap: 2px; width: 60px; }
   .side-object span { font-size: 13px; line-height: 1.1; }
 }
+
+/* Bathroom objects are separate tap targets above the wash surface. */
+.bath-poop { position:absolute; z-index:21; left:var(--poop-x); top:68%; width:clamp(44px, 8cqh, 62px); height:clamp(44px, 8cqh, 62px); }
+@media (max-width:600px) and (orientation:portrait) { .bath-poop { width:44px; height:44px; top:68%; } }
+@media (max-height:480px) and (orientation:landscape) { .bath-poop { top:58%; width:44px; height:44px; } }
+
+.side-object.hall-micro, .side-object.garden-can, .side-object.playground-goal { left: auto; right: 4%; }
+.garden-plots { position: absolute; top: 60%; left: 16%; right: 16%; height: 23%; display: flex; justify-content: space-around; align-items: flex-end; z-index: 10; pointer-events: auto; }
+.garden-plot { position: relative; width: clamp(44px, 10cqw, 76px); height: 100%; border: 0; background: none; padding: 0; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; touch-action: manipulation; transition: transform .2s ease; }
+.garden-plot:active { transform: scale(.93); }
+.garden-plot .dirt { position: absolute; bottom: 0; width: 92%; height: auto; z-index: 1; pointer-events: none; }
+.garden-plot .stem { position: absolute; bottom: 12%; width: 56%; height: auto; z-index: 2; transform-origin: bottom center; transition: transform .35s ease; pointer-events: none; }
+.garden-plot .head { position: absolute; bottom: 44%; width: 68%; height: auto; z-index: 3; transform-origin: bottom center; transition: transform .35s ease, filter .35s ease; pointer-events: none; }
+.garden-plot.withered .stem { transform: rotate(-18deg) scaleY(.86); }
+.garden-plot.withered .head { transform: rotate(-35deg) translateY(14%); filter: brightness(.72) saturate(.55); }

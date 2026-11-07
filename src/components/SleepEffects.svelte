@@ -4,7 +4,7 @@
 </script>
 <div class="sleep-effects" class:still={reducedMotion} aria-label={translate($language,'Pou sedang tidur','Pou is sleeping')}>
   {#each [0,1,2] as i}<span style={`--i:${i}`} aria-hidden="true">Z</span>{/each}
-  <small aria-live="off">{#if exhausted}<strong>{translate($language,"Ngantuk berat · Istirahat dulu","Very sleepy · Time to rest")}</strong><br/>{Math.floor(energy)}{translate($language,"% energi · Bisa bangun di 20%","% energy · Can wake at 20%")}{:else}{translate($language,"Memulihkan energi · +0,8%/detik","Restoring energy · +0.8%/second")}{/if}</small>
+  <small aria-live="off">{#if exhausted}<strong>{translate($language,"Ngantuk berat · Istirahat dulu","Very sleepy · Time to rest")}</strong><br/>{Math.floor(energy)}{translate($language,"% energi · Bisa bangun di 20%","% energy · Can wake at 20%")}{:else}{translate($language,"Memulihkan energi · ~70%/jam","Restoring energy · ~70%/hour")}{/if}</small>
 </div>
 <style>
   .sleep-effects{position:absolute;inset:0;pointer-events:none;z-index:5}

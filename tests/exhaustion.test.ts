@@ -14,22 +14,23 @@ test('energy below ten forces rest immediately, including at an unchanged clock'
 test('forced rest persists through reload and wake attempts until twenty energy',()=>{
   let save=model.newSave(1000);save.stats.energy=5;save=model.advance(save,1000);
   save.sleeping=false;save=model.advance(model.parseSave(JSON.parse(JSON.stringify(save))),11000);
-  assert.equal(save.stats.energy,13);assert.equal(save.exhausted,true);assert.equal(save.sleeping,true);
-  save=model.advance(save,21000);assert.equal(save.stats.energy,21);assert.equal(save.exhausted,false);
-  save.sleeping=false;assert.equal(model.advance(save,21000).sleeping,false);
+  assert.ok(Math.abs(save.stats.energy-(5+model.NEEDS_PER_HOUR.sleepEnergy/360))<1e-8);assert.equal(save.exhausted,true);assert.equal(save.sleeping,true);
+  const recoveredAt=1000+Math.ceil(15/model.NEEDS_PER_HOUR.sleepEnergy*3_600_000)+1;
+  save=model.advance(save,recoveredAt);assert.ok(save.stats.energy>=20);assert.equal(save.exhausted,false);
+  save.sleeping=false;assert.equal(model.advance(save,recoveredAt).sleeping,false);
 });
 test('offline decay crosses the fatigue threshold once and then restores energy',()=>{
   const save=model.newSave(1000);save.stats.energy=12.5;
   const now=1000+3600000+5000;
-  const whole=model.advance(save,now),split=model.advance(model.advance(save,1000+3600000),now);
-  assert.equal(whole.sleeping,true);assert.equal(whole.exhausted,true);assert.ok(Math.abs(whole.stats.energy-14)<1e-6);
+  const whole=model.advance(save,now,()=>1),split=model.advance(model.advance(save,1000+3600000,()=>1),now,()=>1);
+  assert.equal(whole.sleeping,true);assert.equal(whole.exhausted,false);assert.ok(whole.stats.energy>20&&whole.stats.energy<100);
   assert.ok(Math.abs(split.stats.energy-whole.stats.energy)<1e-6);
-  const overnight=model.advance(save,1000+2*3600000);assert.equal(overnight.stats.energy,100);assert.equal(overnight.exhausted,false);assert.equal(overnight.sleeping,true);
+  const overnight=model.advance(save,1000+2*3600000,()=>1);assert.ok(overnight.stats.energy>90&&overnight.stats.energy<100);assert.equal(overnight.exhausted,false);assert.equal(overnight.sleeping,false);assert.equal(overnight.xp,50);
 });
 test('energy potions work during forced rest and antidotes do not bypass fatigue',()=>{
   let save=model.newSave(1000);save.stats.energy=5;save.potions.antidote=1;save=model.advance(save,1000);
   assert.equal(consumePotion(save,'antidote',1000),'');assert.equal(save.sleeping,true);assert.equal(save.exhausted,true);
-  assert.equal(consumePotion(save,'2',1000),'');assert.equal(save.stats.energy,35);assert.equal(save.exhausted,false);
+  assert.equal(consumePotion(save,'4',1000),'');assert.equal(save.stats.energy,100);assert.equal(save.exhausted,false);
   const unlocked=model.newSave(1000);unlocked.stats.energy=1;unlocked.sleeping=true;unlocked.exhausted=true;unlocked.potions.infinite=1;
   assert.equal(consumePotion(unlocked,'infinite',1000),'');assert.equal(unlocked.stats.energy,100);assert.equal(unlocked.exhausted,false);
 });

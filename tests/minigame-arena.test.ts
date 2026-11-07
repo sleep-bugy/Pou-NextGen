@@ -21,8 +21,8 @@ test('Food Drop cloth covers the complete arena instead of a portrait strip',()=
 });
 
 test('food can spawn near the far side of the actual wide arena',()=>{
-  const a = arena();a.engine.update(.9);a.engine.draw();
-  const falling = a.sprites.filter(s=>s.path==='games/food/horseshoe.png');
+  const a = arena();a.engine.update(2.1);a.engine.draw();
+  const falling = a.sprites.filter(s=>s.path==='games/food/plane.png');
   assert.ok(falling.some(s=>s.x+s.w/2>1366*.8));
   a.engine.destroy();
 });

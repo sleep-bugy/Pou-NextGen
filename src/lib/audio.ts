@@ -5,6 +5,7 @@ export class GameAudio {
   sound = true;
   music = true;
   private tracks = new Map<string, HTMLAudioElement>();
+  private activeClones = new Set<HTMLAudioElement>();
   private background?: HTMLAudioElement;
   private activeMusic = '';
   private unlocked = false;
@@ -21,7 +22,13 @@ export class GameAudio {
 
   setSound(enabled: boolean) {
     this.sound = enabled;
-    if (!enabled) { this.tracks.forEach(track => track.pause()); this.stopShower(); this.stopSnore(); }
+    if (!enabled) {
+      this.tracks.forEach(track => track.pause());
+      this.activeClones.forEach(clone => clone.pause());
+      this.activeClones.clear();
+      this.stopShower();
+      this.stopSnore();
+    }
   }
 
   play(name: string, volume = 0.6,rate=1) {
@@ -34,12 +41,23 @@ export class GameAudio {
       track.preload = 'auto';
       this.tracks.set(name, track);
     }
-    track.volume = volume;
-    track.playbackRate=rate;
-    track.preservesPitch=rate===1;
-    (track as HTMLAudioElement&{webkitPreservesPitch?:boolean}).webkitPreservesPitch=rate===1;
-    track.currentTime = 0;
-    void track.play().catch(() => {});
+    let target = track;
+    if (!track.paused && !track.ended && track.currentTime > 0 && typeof track.cloneNode === 'function') {
+      try {
+        const clone = track.cloneNode(true) as HTMLAudioElement;
+        this.activeClones.add(clone);
+        clone.addEventListener?.('ended', () => this.activeClones.delete(clone), { once: true });
+        target = clone;
+      } catch {
+        target = track;
+      }
+    }
+    target.volume = volume;
+    target.playbackRate=rate;
+    target.preservesPitch=rate===1;
+    (target as HTMLAudioElement&{webkitPreservesPitch?:boolean}).webkitPreservesPitch=rate===1;
+    target.currentTime = 0;
+    void target.play().catch(() => {});
   }
 
   startShower() {
@@ -107,9 +125,16 @@ export class GameAudio {
     void this.background.play().catch(() => {});
   }
 
-  pause() { this.background?.pause(); this.tracks.forEach(track => track.pause()); this.stopShower(); this.stopSnore(); }
-  resume() { if (this.music) void this.background?.play().catch(() => {}); }
-  stop() { this.pause(); this.activeMusic = ''; }
+  pause() {
+    this.background?.pause();
+    this.tracks.forEach(track => track.pause());
+    this.activeClones.forEach(clone => clone.pause());
+    this.activeClones.clear();
+    this.stopShower();
+    this.stopSnore();
+  }
+  resume() { if (this.music && this.activeMusic) void this.background?.play().catch(() => {}); }
+  stop() { this.pause(); this.activeMusic = ''; this.background = undefined; }
 }
 
 export const audio = new GameAudio();

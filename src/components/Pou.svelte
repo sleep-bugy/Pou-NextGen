@@ -3,7 +3,7 @@
   import { onMount } from 'svelte';
   import { drawPou, lookFromSave } from '../lib/draw-pou';
   import type { Save } from '../lib/model';
-  import { containsPou, type Point } from '../lib/pou-geometry';
+  import { containsPou, pouCanvasGeometry, type Point } from '../lib/pou-geometry';
   let { save, eating = 0, gaze = { x: 0, y: 0 }, onpet }: { save: Save; eating?: number; gaze?: Point; onpet: () => boolean } = $props();
   let canvas: HTMLCanvasElement;
   let bounce = 0;
@@ -25,9 +25,10 @@
         const reduced = save.settings.reducedMotion || matchMedia('(prefers-reduced-motion: reduce)').matches;
         const look=lookFromSave(save);
         const breath = reduced ? 1 : 1 + Math.sin(time / (look.tired?1900:1100)) * (look.tired ? .012 : .008);
-        const size = Math.min(width * 0.78, height * 0.75);
-        const y = height * 0.55 - Math.sin(Math.max(0, bounce - time) / 90) * Math.max(0, bounce - time) / 30;
-        c.fillStyle = 'rgba(0,0,0,.1)'; c.beginPath(); c.ellipse(width / 2, height * 0.55 + size * 0.49, size * 0.4, size * 0.045, 0, 0, Math.PI * 2); c.fill();
+        const geometry = pouCanvasGeometry(width, height, save.bodySize * (look.tiny ? .65 : 1));
+        const size = Math.min(width * 0.78, height * 0.75) * save.bodySize;
+        const y = geometry.y - Math.sin(Math.max(0, bounce - time) / 90) * Math.max(0, bounce - time) / 30;
+        c.fillStyle = 'rgba(0,0,0,.1)'; c.beginPath(); c.ellipse(width / 2, geometry.y + geometry.size * 0.47, geometry.size * 0.4, geometry.size * 0.045, 0, 0, Math.PI * 2); c.fill();
         const yawn=look.tired?(reduced ? .35 : Math.max(0,Math.sin((time%4600)/1500*Math.PI))*.7):0;
         drawPou(c, width / 2, y, size * breath, { ...look, lookX: gaze.x, lookY: gaze.y, mouth: Math.max(yawn,eating > Date.now() ? 0.8 : 0), blink: !reduced && time % 4900 < 130 });
       }
@@ -38,7 +39,7 @@
   });
   function touch(event: MouseEvent) {
     const r = canvas.getBoundingClientRect();
-    const onBody = containsPou({ x: event.clientX - r.left, y: event.clientY - r.top }, { x: r.width / 2, y: r.height * 0.55, size: Math.min(r.width * 0.78, r.height * 0.75)*(lookFromSave(save).tiny ? .65 :1) });
+    const onBody = containsPou({ x: event.clientX - r.left, y: event.clientY - r.top }, pouCanvasGeometry(r.width, r.height, save.bodySize * (lookFromSave(save).tiny ? .65 : 1)));
     if ((event.detail === 0 || onBody) && onpet()) bounce = performance.now() + 350;
   }
 </script>

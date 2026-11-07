@@ -41,8 +41,16 @@ export function containsPou(point: Point, geometry: PouGeometry): boolean {
   return inside;
 }
 
-export function roomPouGeometry(width: number, height: number): PouGeometry {
-  return { x: width * 0.5, y: height * 0.524, size: Math.min(width * 0.76 * 0.78, height * 0.48 * 0.75) };
+/** Keep the base of Pou on the same floor as the character grows or shrinks. */
+export function pouCanvasGeometry(width: number, height: number, scale = 1): PouGeometry {
+  const adultSize = Math.min(width * 0.78, height * 0.75);
+  const size = adultSize * scale;
+  return { x: width * 0.5, y: height * 0.55 + (adultSize - size) * 141 / 300, size };
+}
+
+export function roomPouGeometry(width: number, height: number, scale = 1): PouGeometry {
+  const body = pouCanvasGeometry(width * 0.76, height * 0.48, scale);
+  return { x: body.x + width * 0.12, y: body.y + height * 0.26, size: body.size };
 }
 
 export function gazeAt(point: Point, geometry: PouGeometry): Point {

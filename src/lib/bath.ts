@@ -7,14 +7,15 @@ export interface WaterParticle extends Point {
   age: number; life: number; kind: 'drop' | 'splash' | 'runoff';
 }
 
-export function pointOnPou(point: Point, width: number, height: number): boolean {
-  return containsPou({ x: point.x / 100 * width, y: point.y / 100 * height }, roomPouGeometry(width, height));
+export function pointOnPou(point: Point, width: number, height: number, bodySize = 1): boolean {
+  const geometry = roomPouGeometry(width, height, bodySize);
+  return containsPou({ x: point.x / 100 * width, y: point.y / 100 * height }, geometry);
 }
 
-export function showerHitsPou(water: Point, width: number, height: number): boolean {
+export function showerHitsPou(water: Point, width: number, height: number, bodySize = 1): boolean {
   for (let y = Math.max(water.y, 30); y < 72; y += 2) {
     const spread = Math.max(0, y - water.y) * 0.13;
-    for (const x of [water.x - spread, water.x, water.x + spread]) if (pointOnPou({ x, y }, width, height)) return true;
+    for (const x of [water.x - spread, water.x, water.x + spread]) if (pointOnPou({ x, y }, width, height, bodySize)) return true;
   }
   return false;
 }
@@ -37,7 +38,7 @@ export class BathWater {
   private random: () => number;
   constructor(random: () => number = Math.random) { this.random = random; }
 
-  step(seconds: number, water: Point | null, width: number, height: number, reducedMotion = false) {
+  step(seconds: number, water: Point | null, width: number, height: number, reducedMotion = false, bodySize = 1) {
     const dt = Math.min(Math.max(0, seconds), 0.04);
     if (width <= 0 || height <= 0 || !dt) return;
     this.wetness = Math.min(1, Math.max(0, this.wetness + dt * (water ? 0.65 : -0.8)));
@@ -53,7 +54,7 @@ export class BathWater {
       particle.previousX = particle.x; particle.previousY = particle.y;
       particle.age += dt; particle.vy += dt * (particle.kind === 'drop' ? 85 : 30);
       particle.x += particle.vx * dt; particle.y += particle.vy * dt;
-      if (particle.kind === 'drop' && (pointOnPou(particle, width, height) || particle.y >= 78)) {
+      if (particle.kind === 'drop' && (pointOnPou(particle, width, height, bodySize) || particle.y >= 78)) {
         for (let i = 0; i < 2; i++) spawned.push(this.make('splash', particle.x, Math.min(particle.y, 78), (this.random() - 0.5) * 22, -4 - this.random() * 9, 0.22 + this.random() * 0.2));
         if (particle.y < 75) spawned.push(this.make('runoff', particle.x, particle.y, (this.random() - 0.5) * 4, 18 + this.random() * 12, 0.45));
       } else if (particle.age < particle.life && particle.y < 82 && particle.x > 0 && particle.x < 100) survivors.push(particle);

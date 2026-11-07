@@ -13,7 +13,7 @@ const shuffle = <T>(array: T[]) => {
   for (let i = array.length - 1; i > 0; i--) { const j = random(i + 1); [array[i], array[j]] = [array[j], array[i]]; }
   return array;
 };
-interface Item { x: number; y: number; v?: number; type?: number; w?: number; h?: number; coin?: boolean; }
+interface Item { x: number; y: number; v?: number; type?: number; w?: number; h?: number; coin?: boolean; coinX?: number; bonus?: boolean; }
 
 export function winningLine(board: number[], columns: number, rows: number, count: number): number {
   for (let y = 0; y < rows; y++) for (let x = 0; x < columns; x++) {
@@ -42,7 +42,7 @@ export function connectedGroup(board: number[], index: number, columns: number):
   return result;
 }
 
-/** A run owns its clock and score. A reward is issued by the caller only on finish. */
+/** A run owns its clock, score, and any coins collected during play. */
 export class MiniEngine {
   private W = 480;
   score = 0;
@@ -56,6 +56,8 @@ export class MiniEngine {
   private tick = 0;
   private player: Item = { x: 240, y: 530, v: 0 };
   private items: Item[] = [];
+  private jetCoins: Item[] = [];
+  private jetPipeCount = 0;
   private board: number[] = [];
   private selected: number[] = [];
   private matched = new Set<number>();
@@ -80,6 +82,9 @@ export class MiniEngine {
   private pointerX = 240;
   private keys = new Set<string>();
   private totalHeight = 0;
+  private foodUntilCoin = 2;
+  private jumpCoinInterval = 5;
+  private jumpUntilCoin = 5;
   private lastScore = -1;
   private frame = 0;
   private lastTime = 0;
@@ -91,7 +96,7 @@ export class MiniEngine {
 
   constructor(private canvas: HTMLCanvasElement, gameId: string, private look: PouLook,
     private onScore: (score: number, lives: number, time: number, coins: number) => void,
-    private onEnd: (score: number, message: string) => void, private localize: (text: string) => string = text => text) {
+    private onEnd: (score: number, message: string) => void, private localize: (text: string) => string = text => text, private onCoin: (amount: number) => void = () => {}) {
     this.game = GAMES.find(g => g.id === gameId)!;
     this.c = canvas.getContext('2d')!;
     this.board = Array.from({ length: 36 }, () => random(4));
@@ -99,7 +104,8 @@ export class MiniEngine {
     if (this.game.mode === 'tic') this.board = Array(9).fill(-1);
     if (this.game.mode === 'four') this.board = Array(42).fill(-1);
     if (this.game.mode === 'jump') this.seedJump();
-    if (this.game.mode === 'fall') this.items = Array.from({ length: 5 }, (_, i) => ({ x: random(310), y: 220 + i * 150, w: 150 }));
+    if (this.game.mode === 'catch') this.lives = 8;
+    if (this.game.mode === 'fall') { this.lives = 5; this.seedFall(); }
     if (this.game.mode === 'fly') { this.player.x = 110; this.player.y = 300; }
     if (this.game.mode === 'run') { this.player.x = 100; this.player.y = 517; }
     if (this.game.mode === 'sounds') { this.sequence = [random(4)]; this.lockUntil = 1.5; }
@@ -118,7 +124,9 @@ export class MiniEngine {
       this.player.x *= ratio;
       if (this.shot && this.player.w) this.player.w *= ratio;
       if (this.game.mode === 'hoops' && !this.shot) this.player.x = this.W * .3;
+      this.jetCoins.forEach(coin => coin.x *= ratio);
       this.items.forEach(item => {
+        if (item.coinX !== undefined) item.coinX *= ratio;
         const oldWidth = item.w ?? 0;
         if (this.game.mode === 'jump') {
           item.w = Math.min(180,Math.max(80,oldWidth*ratio));
@@ -128,6 +136,7 @@ export class MiniEngine {
       this.drag = undefined; this.selected = []; this.lastTime = 0;
       this.moveTarget = null;
       if(this.game.mode==='jump'&&!this.elapsed)this.seedJump();
+      if(this.game.mode==='fall'&&!this.elapsed)this.seedFall();
       if (this.game.mode === 'swap' && !this.elapsed) this.removeInitialMatches();
       if(this.game.mode==='swap')this.ensureSwap();
       if(this.game.mode==='match')this.ensureMatch();
@@ -147,13 +156,28 @@ export class MiniEngine {
   destroy() { cancelAnimationFrame(this.frame); this.resize.disconnect(); this.signal.abort(); }
   private clearKeys = () => this.keys.clear();
   private seedJump() {
+    this.jumpCoinInterval = 5; this.jumpUntilCoin = 5;
     const width=Math.min(180,Math.max(100,this.W*.18));
     this.items=[{x:this.W/2-width/2,y:590,w:width}];
     while(this.items.length<10)this.items.push(this.jumpPlatform(this.items.at(-1)!));
     this.player={x:this.W/2,y:590-JUMP_RADIUS,v:-JUMP_SPEED};
   }
+  private fallCloud(y: number): Item {
+    const width = Math.min(150, this.W * .32), x = Math.random() * (this.W - width);
+    const coinX = x + width / 2 < this.W / 2 ? this.W - 45 : 45;
+    return { x, y, w: width, coin: true, coinX };
+  }
+  private seedFall() {
+    this.player = { x: this.W / 2, y: 380, v: 0 };
+    this.items = Array.from({ length: 5 }, (_, i) => this.fallCloud(500 + i * 150));
+  }
   private jumpPlatform(from: Item): Item {
-    return { ...nextPlatform(from as {x:number;y:number;w:number}, this.W, Math.random), coin: Math.random() < .4 };
+    const coin = --this.jumpUntilCoin <= 0;
+    if (coin) this.jumpUntilCoin = this.jumpCoinInterval;
+    return { ...nextPlatform(from as {x:number;y:number;w:number}, this.W, Math.random), coin };
+  }
+  private awardCoin(x: number, y: number, amount = 1) {
+    this.collectedCoins += amount; this.onCoin(amount); this.effect(`+${amount}`, x, y, '#fff2a4'); audio.play('coin');
   }
   private effect(text:string,x=this.player.x,y=this.player.y,color='#fff') { this.effects.push({text,x,y,color,life:.8});this.effects=this.effects.slice(-16); }
   private controlKey(key:string){return ({a:'ArrowLeft',d:'ArrowRight',w:'ArrowUp'} as Record<string,string>)[key.toLowerCase()]??key;}
@@ -212,10 +236,10 @@ export class MiniEngine {
     if (this.game.mode === 'run' && Math.abs(this.player.y-517)<1 && this.player.v===0 && !this.items.some(item=>item.type===1&&this.player.x>item.x&&this.player.x<item.x+item.w!)) { this.player.v = -540; audio.play('cloud'); }
   }
 
-  private finish(message = 'Game Over!') {
+  private finish(message = 'Game Over!', win = false) {
     if (this.finished) return;
     this.finished = true; this.resultMessage = message;
-    audio.play(message.includes('win') || message.includes('Great') ? 'success' : 'game_over');
+    audio.play(win ? 'success' : 'game_over');
     this.onEnd(this.score, message);
   }
 
@@ -246,33 +270,37 @@ export class MiniEngine {
       if (!this.remaining) {this.finish('Time up!');return;}
     }
     if (mode === 'catch') {
-      if (this.tick > Math.max(0.28, 0.8 - this.score / 180)) {
-        this.tick = 0; this.items.push({ x: 30 + random(Math.max(1,this.W-60)), y: -40, type: random(10), v: 140 + this.score * 2 });
+      const interval = Math.max(0.2, 2 - this.score * 0.035);
+      if (this.tick > interval) {
+        this.tick = 0; this.items.push({ x: 30 + random(Math.max(1,this.W-60)), y: -40, type: random(12), v: 140 + this.score * 2 });
       }
       for (const item of this.items) {
-        item.y += dt * item.v!;
-        if (item.y > 530 && item.y < 600 && Math.abs(item.x - this.player.x) < 46) {
-          if (item.type! >= 8) { this.lives--; this.effect('Ouch!',item.x,530,'#ff8680');audio.play('thud'); }
-          else { this.score++;this.effect('+1',item.x,530,'#fff2a4');audio.play('eat_1'); }
+        const before = item.y; item.y += dt * item.v!;
+        if (before < 560 && item.y >= 560) {
+          const caught = Math.abs(item.x - this.player.x) < 46;
+          if (item.type! >= 8) {
+            if (caught) { this.effect('Ouch!',item.x,560,'#ff8680'); audio.play('no'); this.finish(); }
+          } else if (caught) {
+            this.score++; audio.play('eat_1');
+            if (--this.foodUntilCoin <= 0) { this.awardCoin(item.x, 560); this.foodUntilCoin = interval < .3 ? 3 : 2; }
+          } else {
+            this.lives--; audio.play('a2mmn');
+            if (this.lives <= 0) this.finish();
+          }
           item.y = 900;
-        } else if (item.y > 700 && item.y < 800 && item.type! < 8) { this.lives--; item.y = 900; audio.play('no'); }
+        }
+        if (this.finished) break;
       }
       this.items = this.items.filter(i => i.y < 800);
-      if (this.lives <= 0) this.finish();
     }
     if (mode === 'jump') {
       const oldY = this.player.y;
       this.player.v! += dt * JUMP_GRAVITY; this.player.y += this.player.v! * dt;
-      for (const platform of this.items) {
-        if (!platform.coin) continue;
-        const x = platform.x + platform.w! / 2, y = platform.y - 44;
-        if (Math.abs(this.player.x - x) < 34 && Math.min(oldY, this.player.y) <= y + 32 && Math.max(oldY, this.player.y) >= y - 32) {
-          platform.coin = false; this.collectedCoins++; this.effect('+1', x, y, '#fff2a4'); audio.play('coin');
-        }
-      }
       if (this.player.v! > 0) for (const platform of this.items) {
         if (oldY + JUMP_RADIUS <= platform.y && this.player.y + JUMP_RADIUS >= platform.y && this.player.x + 22 > platform.x && this.player.x - 22 < platform.x + platform.w!) {
-          this.player.v = -JUMP_SPEED; this.player.y = platform.y-JUMP_RADIUS;this.effect('↑',this.player.x,platform.y,'#fff2a4');audio.play('cloud');break;
+          this.player.v = -JUMP_SPEED; this.player.y = platform.y-JUMP_RADIUS;
+          if (platform.coin) { platform.coin = false; this.awardCoin(platform.x + platform.w! / 2, platform.y - 44); this.jumpCoinInterval = Math.max(3, this.jumpCoinInterval - 1); }
+          this.effect('↑',this.player.x,platform.y,'#fff2a4');audio.play(Math.random() < .5 ? 'hu2u1' : 'hu2u2');break;
         }
       }
       if (this.player.y < 300) {
@@ -289,33 +317,43 @@ export class MiniEngine {
       if (this.player.y > H + 40) this.finish();
     }
     if (mode === 'fall') {
-      const speed = 65 + this.elapsed * 1.8;
-      this.items.forEach(i => i.y -= speed * dt);
-      this.player.v = Math.min(300, this.player.v! + dt * 600);
-      const oldY = this.player.y; this.player.y += this.player.v! * dt;
-      for (const platform of this.items) {
-        if (oldY + 23 <= platform.y + speed * dt && this.player.y + 23 >= platform.y && (this.player.x < platform.x + 18 || this.player.x > platform.x + platform.w! - 18)) {
-          this.player.y = platform.y - 24; this.player.v = 0;
+      const speed = 120 + Math.min(120, this.elapsed * 1.8);
+      for (const cloud of this.items) {
+        const before = cloud.y; cloud.y -= speed * dt;
+        if (before > this.player.y && cloud.y <= this.player.y) {
+          if (this.player.x > cloud.x && this.player.x < cloud.x + cloud.w!) {
+            this.lives--; this.effect('Ouch!',this.player.x,this.player.y,'#ff8680'); audio.play('a2mmn');
+            if (this.lives <= 0) { this.finish(); break; }
+          } else { this.score++; audio.play(Math.random() < .5 ? 'cloud' : 'cloud2'); }
+        }
+        if (cloud.coin && before + 30 > this.player.y && cloud.y + 30 <= this.player.y && Math.abs(this.player.x - cloud.coinX!) < 35) {
+          cloud.coin = false; this.awardCoin(cloud.coinX!, this.player.y);
         }
       }
-      this.player.y = Math.min(570, this.player.y);
       this.items = this.items.filter(i => i.y > -50);
-      while (this.items.length < 6) {
-        const gap = Math.min(this.W-60,Math.max(120,this.W*.31));
-        this.items.push({x:20+random(Math.max(1,this.W-gap-40)),y:Math.max(...this.items.map(i=>i.y))+150,w:gap});
-      }
-      this.score = Math.floor(this.elapsed * 3);
-      if (this.player.y < 30) this.finish();
+      while (this.items.length < 5) this.items.push(this.fallCloud(Math.max(H, ...this.items.map(i=>i.y)) + 150));
     }
     if (mode === 'fly') {
       this.player.v! += dt * 650; this.player.y += this.player.v! * dt;
-      if (this.tick > 1.6) { this.tick = 0; this.items.push({ x: this.W+40, y: 160 + random(240), type: 0 }); }
+      if (this.tick > 1.6) {
+        this.tick = 0;
+        const pipe = { x: this.W+40, y: 160 + random(240), type: 0 };
+        this.items.push(pipe);
+        const index = this.jetPipeCount++;
+        if ((index + 1) % 20 === 0) this.jetCoins.push({ x: pipe.x + 32, y: pipe.y, bonus: true });
+        else if (index % 2 === 0) this.jetCoins.push({ x: pipe.x + 32, y: pipe.y });
+      }
       for (const pipe of this.items) {
         pipe.x -= dt * (150 + this.score * 3) * Math.max(1,Math.sqrt(this.W/480));
         if (!pipe.type && pipe.x + 64 < this.player.x) { pipe.type = 1; this.score++; audio.play('point'); }
         if (Math.abs(this.player.x - (pipe.x + 32)) < 52 && (this.player.y - 23 < pipe.y - 96 || this.player.y + 23 > pipe.y + 96)) this.finish();
       }
       this.items = this.items.filter(i => i.x > -100);
+      for (const coin of this.jetCoins) {
+        coin.x -= dt * (150 + this.score * 3) * Math.max(1,Math.sqrt(this.W/480));
+        if (Math.hypot(coin.x - this.player.x, coin.y - this.player.y) < 36) { this.awardCoin(coin.x, coin.y, coin.bonus ? 5 : 1); coin.x = -1000; }
+      }
+      this.jetCoins = this.jetCoins.filter(coin => coin.x > -100);
       if (this.player.y < 0 || this.player.y > 620) this.finish();
     }
     if (mode === 'run') {
@@ -427,8 +465,8 @@ export class MiniEngine {
       this.selected.push(index); audio.play('click');
       if (this.selected.length === 2) {
         if (this.board[this.selected[0]] === this.board[this.selected[1]]) {
-          this.selected.forEach(i => this.matched.add(i)); this.selected = []; this.score += 10;this.effect('+10',x,y,'#a9f989'); audio.play('match');
-          if (this.matched.size === 16) this.finish('Great memory!');
+          this.selected.forEach(i => this.matched.add(i)); this.selected = []; this.score += 20;this.effect('+20',x,y,'#a9f989'); this.awardCoin(x, y); audio.play('match');
+          if (this.matched.size === 16) this.finish('Great memory!', true);
         } else this.lockUntil = this.elapsed + 0.75;
       }
     } else if (mode === 'color') {
@@ -460,8 +498,8 @@ export class MiniEngine {
 
   private checkBoard(columns: number, rows: number, count: number) {
     const winner = winningLine(this.board, columns, rows, count);
-    if (winner >= 0) { this.score = winner === 0 ? 30 : 0; this.finish(winner === 0 ? 'You win!' : 'Pou wins!'); return true; }
-    if (!this.board.includes(-1)) { this.score = 10; this.finish('Draw!'); return true; }
+    if (winner >= 0) { this.score = winner === 0 ? 30 : 0; this.finish(winner === 0 ? 'You win!' : 'Pou wins!', winner === 0); return true; }
+    if (!this.board.includes(-1)) { this.score = 10; this.finish('Draw!', false); return true; }
     return false;
   }
   private findMatches() {
@@ -541,7 +579,7 @@ export class MiniEngine {
       c.fillStyle = '#a8d178'; c.fillRect(0, 588, this.W, H);
       for (let x = 0; x < this.W; x += 480) this.sprite('games/food/cloth.png', x+240, 605, 480, 130);
       drawPou(c, this.player.x, 558, 88, { ...this.look, mouth: 0.65, lookY: -1 });
-      for (const item of this.items) this.sprite(item.type! < 8 ? `food/${FOODS[item.type!]}.png` : item.type === 8 ? 'games/food/shoe.png' : 'games/food/horseshoe.png', item.x, item.y, 48);
+      for (const item of this.items) this.sprite(item.type! < 8 ? `food/${FOODS[item.type!]}.png` : ['games/food/shoe.png','games/food/horseshoe.png','games/food/cd.png','games/food/plane.png'][item.type! - 8], item.x, item.y, 48);
     } else if (mode === 'jump') {
       for (const platform of this.items) {
         this.sprite('games/jump/ground1.png', platform.x + platform.w! / 2, platform.y + 10, platform.w!, 28);
@@ -549,8 +587,9 @@ export class MiniEngine {
       }
       drawPou(c, this.player.x, this.player.y, 62, this.look);
     } else if (mode === 'fall') {
-      for (const platform of this.items) {
-        for (let x = -25; x < this.W + 25; x += 65) if (x + 40 < platform.x || x - 25 > platform.x + platform.w!) this.sprite('games/fall/cloud.png', x, platform.y, 90, 35);
+      for (const cloud of this.items) {
+        this.sprite('games/fall/cloud.png', cloud.x + cloud.w! / 2, cloud.y, cloud.w!, 42);
+        if (cloud.coin) this.sprite('coin/coin_sm.png', cloud.coinX!, cloud.y + 30, 32, 32);
       }
       drawPou(c, this.player.x, this.player.y, 50, this.look);
     } else if (mode === 'fly') {
@@ -559,6 +598,7 @@ export class MiniEngine {
         if (trunk) { c.drawImage(trunk, pipe.x, pipe.y - 96 - 640, 64, 640); c.save(); c.translate(pipe.x + 64, pipe.y + 96 + 640); c.rotate(Math.PI); c.drawImage(trunk, 0, 0, 64, 640); c.restore(); }
         else { this.rounded(pipe.x, 0, 64, pipe.y - 96, '#a47a4c'); this.rounded(pipe.x, pipe.y + 96, 64, H - pipe.y - 96, '#a47a4c'); }
       }
+      for (const coin of this.jetCoins) this.sprite(coin.bonus ? 'coin/coins_5_sm.png' : 'coin/coin_sm.png', coin.x, coin.y, coin.bonus ? 42 : 32, 32);
       this.sprite('games/jetpou/jetpack.png', this.player.x - 18, this.player.y + 10, 24, 50);
       this.sprite('games/jetpou/fire.png', this.player.x - 24, this.player.y + 47, 14, 28);
       drawPou(c, this.player.x, this.player.y, 52, this.look);
